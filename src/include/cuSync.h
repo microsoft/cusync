@@ -105,7 +105,7 @@ struct CuStage {
   void buildScheduleBuffer() {
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));
     CUDA_CHECK(cudaMemset(tileCounter, 0, sizeof(int)));
-
+    printf("tileCounter %p\n", tileCounter);
     CUDA_CHECK(cudaMalloc(&tileOrder, sizeof(*tileOrder) * numTiles()));
     dim3* hTileOrder = new dim3[numTiles()];
   
@@ -134,7 +134,7 @@ struct CuStage {
     tileStatusRead_ = tileStatus;
   }
 
-  volatile uint* getTileStatusToWrite() {
+  volatile uint* getTileStatusToWait() {
     return tileStatusRead_;
   }
 
@@ -174,7 +174,7 @@ struct CuStage {
   __device__ dim3 init() {}
 
   __device__ dim3 tile(dim3* shared_storage) {
-    if (threadIdx.x == 0) {
+    if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
       if (isProducer()) {
         if (blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
           *kernelExecuted_ = iter;
@@ -185,8 +185,6 @@ struct CuStage {
       if (shared_storage) {
         uint linear_id = atomicAdd(tileCounter, 1) - (iter-1)*numTiles();
         *shared_storage = tileOrder[linear_id];
-        dim3 t = *shared_storage;
-        // if (canPrint) printf("linear_id %d t %d, %d, %d\n", linear_id, t.x, t.y,t.z);
       }
     }
 

@@ -42,10 +42,14 @@
  * wA is A's width and wB is B's width
  */
 template <int BLOCK_SIZE>
-__global__ void MatrixMulCUDA(float *C, float *A, float *B, int wA, int wB) {
+__global__ void MatrixMulCUDA(CuStage<RowMajor, TileSync> custage, float *C, float *A,
+                              float *B, int wA, int wB) {
+  __shared__ int tileSh[3];
+  // Get tile to compute by this thread block
+  dim3 tile = custage.tile((dim3*)&tileSh[0]);
   // Block index
-  int bx = blockIdx.x;
-  int by = blockIdx.y;
+  int bx = tile.x;
+  int by = tile.y;
 
   // Thread index
   int tx = threadIdx.x;
@@ -84,6 +88,10 @@ __global__ void MatrixMulCUDA(float *C, float *A, float *B, int wA, int wB) {
     // Load the matrices from device memory
     // to shared memory; each thread loads
     // one element of each matrix
+    // Wait for tile of A to be computed by producer kernel
+    dim3 tile = {(a - aBegin)/BLOCK_SIZE, by, 1};
+    custage.wait(tile);
+
     As[ty][tx] = A[a + wA * ty + tx];
     Bs[ty][tx] = B[b + wB * ty + tx];
 
@@ -108,7 +116,9 @@ __global__ void MatrixMulCUDA(float *C, float *A, float *B, int wA, int wB) {
   // Write the block sub-matrix to device memory;
   // each thread writes one element
   int c = wB * BLOCK_SIZE * by + BLOCK_SIZE * bx;
-  C[c + wB * ty + tx] = Csub;
+  
+  // Post the status of tile when computed
+  custage.post(tile);
 }
 
 void ConstantInit(float *data, int size, float val) {
@@ -134,7 +144,7 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   float *h_D;
   CUDA_CHECK(cudaMallocHost(&h_D, mem_size_A));
   
-  cudaStream_t stream;
+  cudaStream_t prod_stream, cons_stream;
 
   // Initialize host memory
   const float valB = 0.01f;
@@ -172,43 +182,55 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&stop));
 
-  CUDA_CHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+  CUDA_CHECK(cudaStreamCreateWithFlags(&cons_stream, cudaStreamNonBlocking));
+  CUDA_CHECK(cudaStreamCreateWithFlags(&prod_stream, cudaStreamNonBlocking));
 
   // copy host memory to device
   CUDA_CHECK(
-      cudaMemcpyAsync(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice, stream));
+      cudaMemcpy(d_A, h_A, mem_size_A, cudaMemcpyHostToDevice));
   CUDA_CHECK(
-      cudaMemcpyAsync(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice, stream));
+      cudaMemcpy(d_B, h_B, mem_size_B, cudaMemcpyHostToDevice));
   CUDA_CHECK(
-      cudaMemcpyAsync(d_D, h_D, mem_size_B, cudaMemcpyHostToDevice, stream));
+      cudaMemcpy(d_D, h_D, mem_size_B, cudaMemcpyHostToDevice));
   
   // Setup execution parameters
-  dim3 threads(block_size, block_size);
-  dim3 grid(dimsB.x / threads.x, dimsA.y / threads.y);
+  dim3 threads(block_size, block_size, 1);
+  dim3 grid(dimsB.x / threads.x, dimsA.y / threads.y, 1);
+  
+  // Create CuSync and CuStage
+  TileSync sync;
+  dim3 tilesize = threads;
+  CuStage<RowMajor, TileSync> prod(grid, tilesize, sync);
+  CuStage<RowMajor, TileSync> cons(grid, tilesize, sync);
+  prod.iter = cons.iter = 1;
 
+  CuSync<RowMajor, RowMajor, TileSync> handle(prod, cons);
+  
   // Create and start timer
   printf("Computing result using CUDA Kernel...\n");
 
-  // Performs warmup operation using matrixMul CUDA kernel
   assert (block_size == 32);
+  // Invoke producer kernel (C = A * B)
   MatrixMulCUDA<32>
-        <<<grid, threads, 0, stream>>>(d_C, d_A, d_B, dimsA.x, dimsB.x);
-  printf("first done\n");
-  CUDA_CHECK(cudaStreamSynchronize(stream));
-  MatrixMulCUDA<32>
-        <<<grid, threads, 0, stream>>>(d_E, d_C, d_D, dimsA.x, dimsB.x);
-  printf("second done\n");
-  CUDA_CHECK(cudaStreamSynchronize(stream));
+        <<<grid, threads, 0, prod_stream>>>(handle.prod(), d_C, d_A, d_B, dimsA.x, dimsB.x);
+  // CUDA_CHECK(cudaDeviceSynchronize());
 
-  // Record the start event
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  //Invoke wait kernel
+  handle.invokeWaitKernel(cons_stream);
+  // //Invoke consumer kernel (E = C * D)
+  // CUDA_CHECK(cudaDeviceSynchronize());
+
+  MatrixMulCUDA<32>
+        <<<grid, threads, 0, cons_stream>>>(handle.cons(), d_E, d_C, d_D, dimsA.x, dimsB.x);
+  
+  CUDA_CHECK(cudaDeviceSynchronize());
+  printf("done\n");
   
   // Copy result from device to host
   CUDA_CHECK(
-      cudaMemcpyAsync(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost, stream));
+      cudaMemcpy(h_C, d_C, mem_size_C, cudaMemcpyDeviceToHost));
   CUDA_CHECK(
-      cudaMemcpyAsync(h_E, d_E, mem_size_C, cudaMemcpyDeviceToHost, stream));
-  CUDA_CHECK(cudaStreamSynchronize(stream));
+      cudaMemcpy(h_E, d_E, mem_size_C, cudaMemcpyDeviceToHost));
 
   printf("Checking computed result for correctness: \n");
   bool correct = true;
@@ -227,6 +249,7 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
       printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n", i,
              h_C[i], dimsA.x * valB, eps);
       correct = false;
+      break;
     }
   }
 
@@ -242,6 +265,7 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
       printf("Error! Matrix[%05d]=%.8f, ref=%.8f error term is > %E\n", i,
              h_E[i], dimsA.x * valB  * dimsA.x, eps);
       correct = false;
+      break;
     }
   }
 
