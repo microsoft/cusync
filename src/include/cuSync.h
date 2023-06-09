@@ -213,9 +213,9 @@ __global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
 template<typename Sched1, typename Sched2, typename Sync>
 struct CuSync {
   CuStage<Sched1, Sync> prod_;
-  __host__ __device__ CuStage<Sched1, Sync>& prod() {return prod_;}
+  __host__ CuStage<Sched1, Sync>& prod() {return prod_;}
   CuStage<Sched2, Sync> cons_;
-  __host__ __device__ CuStage<Sched2, Sync>& cons() {return cons_;}
+  __host__ CuStage<Sched2, Sync>& cons() {return cons_;}
 
   volatile uint* tileStatus;
   int* kernelExecuted;
