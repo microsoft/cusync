@@ -28,7 +28,7 @@ struct RowMajor {
   }
 };
 
-template<typename Sched, typename Sync> struct CuStage;
+// template<typename Sched, typename Sync> struct CuStage;
 //todo: make args constant
 
 struct RowSync {
@@ -56,6 +56,106 @@ struct RowSync {
   }
 };
 
+#define BatchedRows 2
+
+struct BatchedRowSync {
+  uint waitValue_;
+  uint postValue_;
+  __device__ __host__ BatchedRowSync()  : waitValue_(0), postValue_(0) {}
+  __device__ __host__ BatchedRowSync(uint waitValue) : waitValue_(waitValue), postValue_(1) {}
+  __device__ __host__ BatchedRowSync(uint waitValue, uint postValue) : 
+    waitValue_(waitValue), postValue_(postValue) {}
+  
+  __device__ bool canBatch(const dim3& tile) {
+    if (tile.x < BatchedRows)
+      return false;
+    return false;
+  }
+  
+  __device__ uint waitValue(const dim3& tile, const dim3& grid) {
+    if (canBatch(tile))
+      return waitValue_ * BatchedRows;
+    
+    return waitValue_ * gridDim.x;
+  }
+
+  __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
+    if (canBatch(tile)) {
+      return tile.x/BatchedRows;
+    }
+    return 0;
+  }
+
+  __device__ bool isSync(const dim3& tile) {
+    return tile.y == 0;
+  }
+
+  __device__ uint postValue(const dim3& tile, const dim3& grid) {
+    return postValue_;
+  }
+};
+
+struct TileFirstAndRowSync {
+  uint waitTileValue_;
+  uint postTileValue_;
+  uint waitRowValue_;
+  uint postRowValue_;
+  
+  __device__ __host__ TileFirstAndRowSync() {}
+  __device__ __host__ TileFirstAndRowSync(uint waitTileValue, uint postTileValue, 
+                                          uint waitRowValue) : 
+    waitTileValue_(waitTileValue), postTileValue_(postTileValue), waitRowValue_(waitRowValue), postRowValue_(1) {}
+  // __device__ __host__ TileFirstAndRowSync(uint waitValue, uint postValue) : 
+  //   waitValue_(waitValue), postValue_(postValue) {}
+  
+  __device__ int tileBatch(const dim3& tile) {
+    if (isTileSync(tile))
+      return 2;
+    return 1;
+  }
+
+  __device__ bool isTileSync(const dim3& tile) {
+    if (tile.x < 2) {
+      return true;
+    }
+    return false;
+  }
+
+  __device__ bool isRowSync(const dim3& tile) {
+    return !isTileSync(tile);
+  }
+
+  __device__ uint waitValue(const dim3& tile, const dim3& grid) {
+    if (isTileSync(tile)) {
+      return waitTileValue_;
+    }
+
+    return waitRowValue_;
+  }
+
+  __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
+    if (isTileSync(tile)) {
+      return tile.x * 48 + tile.y;
+    } 
+    return 2 * 48 + tile.x;
+  }
+
+  __device__ bool isSync(const dim3& tile) {
+    if (isTileSync(tile))
+      return true;
+    else
+      return tile.y == 0;
+  }
+
+  __device__ uint postValue(const dim3& tile, const dim3& grid) {
+    if (isTileSync(tile)) {
+      return postTileValue_;
+    }
+
+    return postRowValue_;
+  }
+};
+
 struct TileSync {
   uint waitValue_;
   uint postValue_;
@@ -76,7 +176,12 @@ struct TileSync {
   }
 };
 
-template<typename Sched, typename Sync>
+enum CuStageType {
+  Producer = 1,
+  Consumer = 1 << 2,
+};
+
+template<CuStageType stageType, typename Sched, typename Sync>
 struct CuStage {
   dim3 grid_;
   dim3 prodGrid_;
@@ -164,12 +269,22 @@ struct CuStage {
   }
 
   __device__ __host__ bool isProducer() {
-    return isProducer_;
+    return stageType & CuStageType::Producer;
   }
 
   __device__ __host__ bool isConsumer() {
-    return isConsumer_;
+    return stageType & CuStageType::Consumer;
   }
+
+  // __device__ bool isProducer2() {
+  //   return !isConsumer2();
+  // }
+
+  // __device__ bool isConsumer2() {
+  //   if (gridDim.y == 48)
+  //     return false;
+  //   return true;
+  // }
 
   __device__ dim3 init() {}
 
@@ -208,12 +323,12 @@ __global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
   }
 }
 
-template<typename Sched1, typename Sched2, typename Sync>
+template<typename Stage1, typename Stage2>
 struct CuSync {
-  CuStage<Sched1, Sync> prod_;
-  __host__ CuStage<Sched1, Sync>& prod() {return prod_;}
-  CuStage<Sched2, Sync> cons_;
-  __host__ CuStage<Sched2, Sync>& cons() {return cons_;}
+  Stage1 prod_;
+  __host__ Stage1& prod() {return prod_;}
+  Stage2 cons_;
+  __host__ Stage2& cons() {return cons_;}
 
   volatile uint* tileStatus;
   int* kernelExecuted;
@@ -225,7 +340,7 @@ struct CuSync {
     waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted, prod().iter);
   }
 
-  CuSync(CuStage<Sched1, Sync> prod, CuStage<Sched2, Sync> cons): prod_(prod), cons_(cons) {
+  CuSync(Stage1 prod, Stage2 cons): prod_(prod), cons_(cons) {
     CUDA_CHECK(cudaMalloc(&tileStatus, prod.numTiles() * sizeof(int)));
     CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, prod.numTiles() * sizeof(int)));
     iter = 0;
