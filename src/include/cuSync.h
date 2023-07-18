@@ -67,23 +67,23 @@ struct BatchedRowSync {
     waitValue_(waitValue), postValue_(postValue) {}
   
   __device__ bool canBatch(const dim3& tile) {
-    if (tile.x < BatchedRows)
-      return false;
+    if (tile.x >= BatchedRows)
+      return true;
     return false;
   }
   
   __device__ uint waitValue(const dim3& tile, const dim3& grid) {
     if (canBatch(tile))
-      return waitValue_ * BatchedRows;
-    
-    return waitValue_ * gridDim.x;
+      return waitValue_ * (grid.x - BatchedRows);
+    // printf("waitValue_ %d gridDim.x %d\n", waitValue_* (gridDim.x - BatchedRows);
+    return waitValue_;
   }
 
   __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
     if (canBatch(tile)) {
-      return tile.x/BatchedRows;
+      return BatchedRows;
     }
-    return 0;
+    return tile.x;
   }
 
   __device__ bool isSync(const dim3& tile) {
@@ -110,12 +110,12 @@ struct TileFirstAndRowSync {
   
   __device__ int tileBatch(const dim3& tile) {
     if (isTileSync(tile))
-      return 2;
+      return 8;
     return 1;
   }
 
   __device__ bool isTileSync(const dim3& tile) {
-    if (tile.x < 2) {
+    if (tile.x < 1) {
       return true;
     }
     return false;
@@ -127,7 +127,7 @@ struct TileFirstAndRowSync {
 
   __device__ uint waitValue(const dim3& tile, const dim3& grid) {
     if (isTileSync(tile)) {
-      return waitTileValue_;
+      return waitTileValue_ * tileBatch(tile);
     }
 
     return waitRowValue_;
@@ -135,9 +135,9 @@ struct TileFirstAndRowSync {
 
   __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
     if (isTileSync(tile)) {
-      return tile.x * 48 + tile.y;
+      return (tile.x * 48 + tile.y)/tileBatch(tile);
     } 
-    return 2 * 48 + tile.x;
+    return 1 * 48 + tile.x;
   }
 
   __device__ bool isSync(const dim3& tile) {
@@ -181,7 +181,14 @@ enum CuStageType {
   Consumer = 1 << 2,
 };
 
-template<CuStageType stageType, typename Sched, typename Sync>
+__forceinline__ __device__ 
+uint semaphoreLoad(volatile uint* semaphore) {
+  uint state;
+  asm volatile ("ld.global.acquire.gpu.u32 %0, [%1];" : "=r"(state) : "l"(semaphore));
+  return state;
+}
+
+template<int stageType, typename Sched, typename Sync>
 struct CuStage {
   dim3 grid_;
   dim3 prodGrid_;
@@ -192,16 +199,13 @@ struct CuStage {
   volatile uint* tileStatusRead_;
   int* kernelExecuted_;
   int iter;
-  bool isProducer_;
-  bool isConsumer_;
   Sync syncPolicy_;
   bool canPrint;
 
   __device__ __host__ CuStage(): iter(0) {}
 
   CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
-    grid_(grid), tileSize_(tileSize), iter(0), prodGrid_(0), syncPolicy_(syncPolicy), isProducer_(false),
-    isConsumer_(false), canPrint(false) {
+    grid_(grid), tileSize_(tileSize), iter(0), prodGrid_(0), syncPolicy_(syncPolicy), canPrint(false) {
       buildScheduleBuffer();
   }
 
@@ -210,7 +214,6 @@ struct CuStage {
   void buildScheduleBuffer() {
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));
     CUDA_CHECK(cudaMemset(tileCounter, 0, sizeof(int)));
-    printf("tileCounter %p\n", tileCounter);
     CUDA_CHECK(cudaMalloc(&tileOrder, sizeof(*tileOrder) * numTiles()));
     dim3* hTileOrder = new dim3[numTiles()];
   
@@ -249,7 +252,7 @@ struct CuStage {
   
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
-      while(tileStatusRead_[idx] < iter * syncPolicy_.waitValue(tile, prodGrid_));
+      while(semaphoreLoad(&tileStatusRead_[idx]) < iter * syncPolicy_.waitValue(tile, prodGrid_));
     }
 
     __syncthreads();
@@ -276,16 +279,6 @@ struct CuStage {
     return stageType & CuStageType::Consumer;
   }
 
-  // __device__ bool isProducer2() {
-  //   return !isConsumer2();
-  // }
-
-  // __device__ bool isConsumer2() {
-  //   if (gridDim.y == 48)
-  //     return false;
-  //   return true;
-  // }
-
   __device__ dim3 init() {}
 
   __device__ dim3 tile(dim3* shared_storage) {
@@ -295,8 +288,7 @@ struct CuStage {
           *kernelExecuted_ = iter;
         }
       }
-      // if (isProducerOrConsumer)
-      // printf("stage.tileCounter %p stage.tileOrder %p stage.iter %d\n", stage.tileCounter, stage.tileOrder, stage.iter);   
+
       if (shared_storage) {
         uint linear_id = atomicAdd(tileCounter, 1) - (iter-1)*numTiles();
         *shared_storage = tileOrder[linear_id];
@@ -345,8 +337,6 @@ struct CuSync {
     CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, prod.numTiles() * sizeof(int)));
     iter = 0;
     cons_.prodGrid_ = prod.grid_;
-    prod_.isProducer_ = true;
-    cons_.isConsumer_ = true;
     prod_.setTileStatusToPost(tileStatus);
     cons_.setTileStatusToWait(tileStatus);
     CUDA_CHECK(cudaMalloc(&kernelExecuted, sizeof(int)));
