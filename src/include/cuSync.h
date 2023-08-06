@@ -299,9 +299,11 @@ struct CuStage {
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
       uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
-      // printf("tileStatusRead_[%d] %d {%d, %d, %d} w %d iter %d\n", 
+      // printf("302: tileStatusRead_[%d] %d {%d, %d, %d} w %d iter %d\n", 
       // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
       while(tileStatusRead_[idx] < iter * w);
+      // printf("305: tileStatusRead_[%d] %d {%d, %d, %d} w %d iter %d\n", 
+      // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
     }
 
     // __syncthreads();
@@ -316,6 +318,7 @@ struct CuStage {
       uint idx = syncPolicy_.tileIndex(tile, grid_);
       atomicAdd((int*)&tileStatusWrite_[idx],
                 syncPolicy_.postValue(tile, grid_));
+      // printf("tileStatusWrite_[%d] %d\n", tileStatusWrite_[idx], idx);
     }
 
     __syncwarp();
@@ -332,7 +335,6 @@ struct CuStage {
   __device__ dim3 init() {}
 
   __forceinline__ __device__ dim3 tile(dim3* shared_storage) {
-#if 0 
     if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
       // if (isProducer()) {
       //   if (blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
@@ -351,9 +353,8 @@ struct CuStage {
     dim3 i = *shared_storage;
     __syncthreads();
     return i;
-#endif
-    return isProducer() ? dim3{0, blockIdx.x%24, blockIdx.x/24} : 
-                          dim3{0, blockIdx.x%48, blockIdx.x/48};
+    // return isProducer() ? dim3{0, blockIdx.x%24, blockIdx.x/24} : 
+    //                       dim3{0, blockIdx.x%48, blockIdx.x/48};
   }
 };
 
