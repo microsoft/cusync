@@ -255,16 +255,16 @@ struct CuStage {
     dim3* hTileOrder = new dim3[numTiles()];
 
     if (grid_.z > 1) {
-      for (int z = 0; z < grid_.z; z++) {
-      for (int x = 0; x < grid_.x; x++) {
-      for (int y = 0; y < grid_.y; y++) {
+      for (uint z = 0; z < grid_.z; z++) {
+      for (uint x = 0; x < grid_.x; x++) {
+      for (uint y = 0; y < grid_.y; y++) {
         size_t id = RowMajor().order(grid_, {x, y, z});
         hTileOrder[id] = {x, y, z};
       }}}
     } else {
-      for (int x = 0; x < grid_.x; x++) {
-      for (int y = 0; y < grid_.y; y++) {
-      for (int z = 0; z < grid_.z; z++) {
+      for (uint x = 0; x < grid_.x; x++) {
+      for (uint y = 0; y < grid_.y; y++) {
+      for (uint z = 0; z < grid_.z; z++) {
         size_t id = RowMajor().order(grid_, {x, y, z});
         hTileOrder[id] = {x, y, z};
       }}}
@@ -293,8 +293,8 @@ struct CuStage {
   }
 
   __device__ void wait(const dim3& tile, uint waitingThread = 0) {
-    if (!isConsumer()) return;
-    if (!syncPolicy_.isSync(tile)) return;
+    // if (!isConsumer()) return;
+    // if (!syncPolicy_.isSync(tile)) return;
   
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
@@ -306,7 +306,7 @@ struct CuStage {
       // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
     }
 
-    // __syncthreads();
+    __syncthreads();
   }
 
   __device__ void post(const dim3& tile, uint postThread = 0) {
@@ -351,7 +351,7 @@ struct CuStage {
 
     __syncthreads();
     dim3 i = *shared_storage;
-    __syncthreads();
+
     return i;
     // return isProducer() ? dim3{0, blockIdx.x%24, blockIdx.x/24} : 
     //                       dim3{0, blockIdx.x%48, blockIdx.x/48};

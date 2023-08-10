@@ -37,18 +37,20 @@ static double getCurrentTime() {
   return timeInMicroSeconds();
 }
 
-__global__ void kernel1(float *in, int i, volatile int* sync) {
+__global__ void kernel1(float *in, int i, volatile int* sync, bool cansync) {
 	int linearid = threadIdx.x + blockIdx.x * blockDim.x;
 	in[linearid] = i;
   __syncthreads();
-  if (threadIdx.x == 0)
-    sync[blockIdx.x] = 1;
+  if (cansync && threadIdx.x == 0)
+    sync[blockIdx.x] += 1;
 }
 
-__global__ void kernel2(float *out, float *in, volatile int* sync, bool cansync) {
+__global__ void kernel2(float *out, float *in, volatile int* sync, bool cansync, int iter) {
 	if (cansync && threadIdx.x == 0) {
-		while (sync[blockIdx.x] != 1);
-		sync[blockIdx.x] = 0;
+		for (int i = threadIdx.x; i < 1; i += blockDim.x) {
+      while (sync[i] < iter + 1);
+    }
+      // sync[blockIdx.x] = 0;
 	}
 	__syncthreads();
 	int linearid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -79,8 +81,8 @@ int main() {
   double sync_exec = 0;
   for (int i = 0; i < 110; i++) {
     double s = getCurrentTime();
-    kernel1<<<grid,block,0,prodstream>>>(in, 0, sync);
-    kernel2<<<grid,block,0,prodstream>>>(out, in, sync, true);
+    kernel1<<<grid,block,0,prodstream>>>(in, 0, sync, true);
+    kernel2<<<grid,block,0,prodstream>>>(out, in, sync, true, i);
     CUDA_CHECK(cudaDeviceSynchronize());
     double t = getCurrentTime();
     if (i >= 10)
@@ -93,12 +95,12 @@ int main() {
   double exec = 0;
   for (int i = 0; i < 100; i++) {
     double s = getCurrentTime();
-    kernel1<<<grid,block>>>(in, 0, sync);
-    kernel2<<<grid,block>>>(out, in, sync, false);
+    kernel1<<<grid,block>>>(in, 0, sync, false);
+    kernel2<<<grid,block>>>(out, in, sync, false, i);
     CUDA_CHECK(cudaDeviceSynchronize());
     double t = getCurrentTime();
     exec += t - s;
   }
   printf("exec without sync %lf\n", exec);
-  printf("Overhead %lf\n", (sync_exec - exec)/exec);
+  printf("Overhead %lf %%\n", (sync_exec - exec)/exec * 100.);
 }
