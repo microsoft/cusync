@@ -246,7 +246,8 @@ struct CuStage {
       buildScheduleBuffer();
   }
 
-  __host__ __device__ size_t numTiles() {return grid_.x * grid_.y * grid_.z;}
+  __device__ __host__ size_t numTiles() {return grid_.x * grid_.y * grid_.z;}
+  // __host__ size_t numTiles() {return grid_.x * grid_.y *;}
 
   void buildScheduleBuffer() {
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));
@@ -293,8 +294,8 @@ struct CuStage {
   }
 
   __device__ void wait(const dim3& tile, uint waitingThread = 0) {
-    // if (!isConsumer()) return;
-    // if (!syncPolicy_.isSync(tile)) return;
+    if (!isConsumer()) return;
+    if (!syncPolicy_.isSync(tile)) return;
   
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
@@ -336,17 +337,17 @@ struct CuStage {
 
   __forceinline__ __device__ dim3 tile(dim3* shared_storage) {
     if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
-      // if (isProducer()) {
-      //   if (blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
-      //     *kernelExecuted_ = iter;
-      //   }
-      // }
-
-      if (shared_storage) {
-        // uint linear_id = atomicAdd(tileCounter, 1) - (iter-1)*numTiles();
-        // *shared_storage = tileOrder[linear_id];
-        *shared_storage = tileOrder[blockIdx.x];
+      if (isProducer()) {
+        if (blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
+          *kernelExecuted_ = iter;
+        }
       }
+
+      uint linear_id = atomicAdd(tileCounter, 1);
+      if (linear_id == numTiles() - 1) {
+        *tileCounter = 0;
+      }
+      *shared_storage = tileOrder[linear_id];
     }
 
     __syncthreads();
