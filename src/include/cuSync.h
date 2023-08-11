@@ -195,10 +195,9 @@ struct TileSync {
   
   __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
     if (batch > 1) {
-      if (grid.y % batch != 0 && tile.y >= (grid.y/batch) * batch)
-        return waitValue_ * (grid.y - (grid.y/batch) * batch);
+      return waitValue_ * batch;
     }
-    return waitValue_ * batch;
+    return waitValue_;
   }
 
   __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
@@ -209,7 +208,7 @@ struct TileSync {
   }
 
   __device__ bool isSync(const dim3& tile) {
-    return true;
+    return tile.y % batch == 0;
   }
 };
 
@@ -223,6 +222,12 @@ uint semaphoreLoad(volatile uint* semaphore) {
   uint state;
   asm volatile ("ld.global.acquire.gpu.u32 %0, [%1];" : "=r"(state) : "l"(semaphore));
   return state;
+}
+
+__device__ inline uint glLoad(volatile uint* addr) {
+  uint val;
+  asm ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
+  return val;
 }
 
 template<int stageType, typename Sched, typename Sync>
@@ -302,7 +307,7 @@ struct CuStage {
       uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
       // printf("302: tileStatusRead_[%d] %d {%d, %d, %d} w %d iter %d\n", 
       // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
-      while(tileStatusRead_[idx] < iter * w);
+      while(glLoad(&tileStatusRead_[idx]) < iter * w);
       // printf("305: tileStatusRead_[%d] %d {%d, %d, %d} w %d iter %d\n", 
       // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
     }
@@ -337,12 +342,15 @@ struct CuStage {
   __device__ dim3 init() {}
 
   __forceinline__ __device__ dim3 tile(dim3* shared_storage) {
+    #ifndef AVOID_CUSTOM_ORDER
     if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
+      #ifndef AVOID_WAIT_KERNEL
       if (isProducer()) {
         if (blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
           *kernelExecuted_ = iter;
         }
       }
+      #endif
 
       uint linear_id = atomicAdd(tileCounter, 1);
       if (linear_id == numTiles() - 1) {
@@ -353,18 +361,16 @@ struct CuStage {
 
     __syncthreads();
     dim3 i = *shared_storage;
-
     return i;
+    #else
+    return blockIdx;
+    #endif
     // return isProducer() ? dim3{0, blockIdx.x%24, blockIdx.x/24} : 
     //                       dim3{0, blockIdx.x%48, blockIdx.x/48};
   }
 };
 
-__device__ inline uint glLoad(volatile uint* addr) {
-  uint val;
-  asm ("ld.volatile.global.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
-  return val;
-}
+
 
 __global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
   if (threadIdx.x == 0) {
