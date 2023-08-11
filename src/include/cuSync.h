@@ -293,10 +293,10 @@ struct CuStage {
     return tileStatusRead_;
   }
 
-  __device__ void wait(const dim3& tile, uint waitingThread = 0) {
+  __device__ void wait(const dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return;
     if (!syncPolicy_.isSync(tile)) return;
-  
+    
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
       uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
@@ -307,7 +307,8 @@ struct CuStage {
       // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
     }
 
-    __syncthreads();
+    if (callSync)
+      __syncthreads();
   }
 
   __device__ void post(const dim3& tile, uint postThread = 0) {
