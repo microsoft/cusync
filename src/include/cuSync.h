@@ -47,7 +47,7 @@ struct RowSync {
     return tile.x;
   }
 
-  __device__ bool isSync(const dim3& tile) {
+  __device__ bool isSync(const dim3& tile, const dim3& grid) {
     return tile.y == 0;
   }
 
@@ -168,7 +168,7 @@ struct TileFirstAndRowSync {
     return 1 * 48 + tile.x;
   }
 
-  __device__ bool isSync(const dim3& tile) {
+  __device__ bool isSync(const dim3& tile, const dim3& grid) {
     if (isTileSync(tile))
       return true;
     else
@@ -204,8 +204,58 @@ struct TileSync {
     return (tile.x * grid.y + tile.y)/batch;
   }
 
-  __device__ bool isSync(const dim3& tile) {
-    return tile.y % batch == 0;
+  __device__ bool isSync(const dim3& tile, const dim3& grid) {
+    return true;// && tile.y < grid.y;
+  }
+};
+
+
+template<uint batch, uint convKernelSize>
+struct Conv2DTileSync {
+  uint waitValue_;
+  uint postValue_;
+
+  __device__ __host__ Conv2DTileSync(): waitValue_(1), postValue_(1) {}
+  __device__ __host__ Conv2DTileSync(uint waitValue, uint postValue): 
+    waitValue_(waitValue), postValue_(postValue) {}
+  
+  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
+    return waitValue_ * batch;
+  }
+
+  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
+    {return postValue_;}
+
+  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
+    return tile.x * grid.y + tile.y/convKernelSize;
+  }
+
+  __device__ bool isSync(const dim3& tile, const dim3& grid) {
+    return true;// && tile.y < grid.y;
+  }
+};
+
+struct FirstTileSync {
+  uint waitValue_;
+  uint postValue_;
+
+  __device__ __host__ FirstTileSync(): waitValue_(1), postValue_(1) {}
+  __device__ __host__ FirstTileSync(uint waitValue, uint postValue): 
+    waitValue_(waitValue), postValue_(postValue) {}
+  
+  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
+    return waitValue_;
+  }
+
+  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
+    {return postValue_;}
+
+  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
+    return (tile.x * grid.y + tile.y);
+  }
+
+  __device__ bool isSync(const dim3& tile, const dim3& grid) {
+    return tile.y == 0;
   }
 };
 
@@ -221,9 +271,21 @@ uint semaphoreLoad(volatile uint* semaphore) {
   return state;
 }
 
-__device__ inline uint glLoad(volatile uint* addr) {
+__device__ uint volatileLoad(volatile uint* addr) {
   uint val;
-  asm ("ld.global.volatile.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
+  asm volatile ("ld.global.volatile.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
+  return val;
+}
+
+__device__ __forceinline__ uint glLoad(volatile uint* addr) {
+  uint val;
+  asm volatile ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
+  return val;
+}
+
+__device__ inline uint bringToCache(volatile uint* addr) {
+  uint val;
+  asm ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
   return val;
 }
 
@@ -305,19 +367,24 @@ struct CuStage {
 
   __device__ void wait(const dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return;
-    if (!syncPolicy_.isSync(tile)) return;
-    
+    if (!syncPolicy_.isSync(tile, prodGrid_)) return;
+    // if (prodGrid_.y == grid_.y && tile.y != 0) return;
+
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
       uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
-      // if (isProducer() && isConsumer()) {
-        // printf("314: %p \n", tileStatusRead_);
-      // }
-      // printf("302: tileStatusRead_[%d] %d {%d, %d, %d} w %d iter %d\n", 
-      // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
+      // printf("tileStatusRead_[%d] %d\n", tileStatusRead_[%d]);
       while(glLoad(&tileStatusRead_[idx]) < iter * w);
-      // printf("305: tileStatusRead_[%d] %d {%d, %d, %d} w %d iter %d\n", 
-      // idx, tileStatusRead_[idx], tile.x, tile.y, tile.z, w, iter);
+      // if (glLoad(&tileStatusRead_[idx]) >= iter * w) {
+
+      // } else {
+      //   while(volatileLoad(&tileStatusRead_[idx]) < iter * w);
+      //   // glLoad(&tileStatusRead_[idx]);
+      // }
+      // if (tileStatusRead_[idx] % iter != 0) {
+      // printf("blockIdx.y %d tileStatusRead_[idx] %d iter %d w %d\n", 
+      //        blockIdx.y, glLoad(&tileStatusRead_[idx]), iter, w);
+      // }
     }
 
     if (callSync)
@@ -330,13 +397,10 @@ struct CuStage {
     
     if (threadIdx.x == postThread && threadIdx.y == 0 && threadIdx.z == 0) {
       __threadfence_system();
-      // if (isProducer() && isConsumer()) {
-      //   printf("334: %p \n", tileStatusWrite_);
-      // }
       uint idx = syncPolicy_.tileIndex(tile, grid_);
+      // printf("tileStatusWrite_ %p\n", tileStatusWrite_);
       atomicAdd((int*)&tileStatusWrite_[idx],
-                syncPolicy_.postValue(tile, grid_));
-      // printf("tileStatusWrite_[%d] %d\n", tileStatusWrite_[idx], idx);
+                syncPolicy_.postValue(tile, grid_));      
     }
 
     __syncwarp();
@@ -390,6 +454,7 @@ struct CuStage {
 __global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
   if (threadIdx.x == 0) {
     uint v = glLoad(kernelExecuted);
+ 
     while(v < expectedValue) {
       v = glLoad(kernelExecuted);
     }
