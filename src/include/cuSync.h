@@ -262,6 +262,7 @@ struct FirstTileSync {
 enum CuStageType {
   Producer = 1,
   Consumer = 1 << 2,
+  LLaMAMiddle = 1 << 3,
 };
 
 __forceinline__ __device__ 
@@ -361,14 +362,14 @@ struct CuStage {
     tileStatusRead_ = tileStatus;
   }
 
-  volatile uint* getTileStatusToWait() {
+ __device__ __host__ volatile uint* getTileStatusToWait() {
     return tileStatusRead_;
   }
 
   __device__ void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
-    if (!isConsumer()) return;
+    if (!isConsumer() && !isLLaMAMiddle()) return;
     if (!syncPolicy_.isSync(tile, prodGrid_)) return;
-    // if (prodGrid_.y == grid_.y && tile.y != 0) return;
+    // if (prodGrid_.y == grid_.y) return;
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       if (std::is_same<Sync, Conv2DTileSync<1,9>>::value)
         tile.y = tile.y/9;
@@ -427,6 +428,10 @@ struct CuStage {
 
   __device__ __host__ bool isConsumer() {
     return stageType & CuStageType::Consumer;
+  }
+
+  __device__ __host__ bool isLLaMAMiddle() {
+    return stageType & CuStageType::LLaMAMiddle;
   }
 
   __device__ dim3 init() {}
