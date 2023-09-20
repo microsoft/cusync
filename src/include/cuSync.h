@@ -290,6 +290,15 @@ __device__ inline uint bringToCache(volatile uint* addr) {
   return val;
 }
 
+__global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
+  if (threadIdx.x == 0) {
+    uint v = glLoad(kernelExecuted);
+    while(v < expectedValue) {
+      v = volatileLoad(kernelExecuted);
+    }
+  }
+}
+
 template<int stageType, typename Sched, typename Sync>
 struct CuStage {
   dim3 grid_;
@@ -465,18 +474,12 @@ struct CuStage {
     // return isProducer() ? dim3{0, blockIdx.x%24, blockIdx.x/24} : 
     //                       dim3{0, blockIdx.x%48, blockIdx.x/48};
   }
-};
 
-
-
-__global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
-  if (threadIdx.x == 0) {
-    uint v = glLoad(kernelExecuted);
-    while(v < expectedValue) {
-      v = volatileLoad(kernelExecuted);
-    }
+  void invokeWaitKernel(cudaStream_t stream) {
+    assert(isProducer());
+    waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
   }
-}
+};
 
 template<typename Stage1, typename Stage2>
 struct CuSync {
@@ -508,5 +511,20 @@ struct CuSync {
     prod_.kernelExecuted_ = kernelExecuted;
   }
 };
+
+template<typename Stage1, typename Stage2>
+void initProducerConsumer(Stage1& prod, Stage2& cons) {
+  assert(prod.isProducer());
+  assert(cons.isConsumer());
+
+  if (prod.getTileStatusToPost() == nullptr) {
+    printf("tileStatusToPost is null\n");
+    abort();
+  }
+  cons.prodGrid_ = prod.grid_;
+  cons.setTileStatusToWait(prod.getTileStatusToPost());
+  CUDA_CHECK(cudaMalloc(&prod.kernelExecuted_, sizeof(int)));
+  CUDA_CHECK(cudaMemset(prod.kernelExecuted_, 0, sizeof(int)));
+}
 
 #endif
