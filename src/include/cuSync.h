@@ -231,7 +231,7 @@ struct Conv2DTileSync {
   }
 
   __device__ __forceinline__ bool isSync(const dim3& tile, const dim3& grid) {
-    return true;// && tile.y < grid.y;
+    return tile.y % 9 == 0;
   }
 };
 
@@ -371,16 +371,15 @@ struct CuStage {
     if (!syncPolicy_.isSync(tile, prodGrid_)) return;
     // if (prodGrid_.y == grid_.y) return;
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
-      if (std::is_same<Sync, Conv2DTileSync<1,9>>::value)
+      if (std::is_same<Sync, Conv2DTileSync<1,9>>::value) {
         tile.y = tile.y/9;
+      }
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
       uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
       auto v = glLoad(&tileStatusRead_[idx]);
-      // printf("t{%d, %d, %d} idx %d val %d\n", tile.x, tile.y, tile.z, idx, v);
       while(v < iter * w) {
         v = volatileLoad(&tileStatusRead_[idx]);
-        // if (v < iter * w) break;
-      }
+      }      
       // // asm volatile("prefetch.global.L1 [%0];" :: "l"(&tileStatusRead_[idx]));
       // // v = glLoad(&tileStatusRead_[idx]);
       // // 
@@ -412,7 +411,6 @@ struct CuStage {
       #ifndef NO_ATOMIC_ADD
       atomicAdd((int*)&tileStatusWrite_[idx],
                 syncPolicy_.postValue(tile, grid_));
-      // printf("412: tile{%d, %d, %d} idx %d %d\n", tile.x, tile.y, tile.z, idx, tileStatusWrite_[idx]);
       #else
       uint val = syncPolicy_.postValue(tile, grid_) * iter;
       asm volatile ("st.global.cg.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));
