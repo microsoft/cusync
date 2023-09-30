@@ -108,11 +108,12 @@ using MMAOp = cutlass::arch::OpClassTensorOp;
 using SmArch = cutlass::arch::Sm70;
 
 //First GeMM in MLP is fused with GELU
-#ifdef LLAMA
+#ifdef MLP_LLAMA
 using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
-#elif defined(GPT3)
+#elif defined(MLP_GPT3)
 using EpilogueOp1 = cutlass::epilogue::thread::LinearCombinationGELU<
 #endif
+
     ElementOutput,                                        
     128 / cutlass::sizeof_bits<ElementOutput>::value,
     ElementAccumulator, 
@@ -134,7 +135,7 @@ class BaseMLPGemm : public cutlass::gemm::device::Gemm<ElementInputA, LayoutInpu
                                                         SmArch, ShapeMMAThreadBlock,
                                                         ShapeMMAWarp, ShapeMMAOp,
                                                         EpilogueOp, 
-                                                        cutlass::gemm::threadblock::GemmHorizontalThreadblockSwizzle, 
+                                                        cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle,
                                                         2, 8, 8, splitK> {};
 // Baseline GeMMs
 using Gemm1 = BaseMLPGemm<EpilogueOp1, false>;
@@ -158,7 +159,7 @@ class CuSyncMLPGemm : public cutlass::gemm::device::CuSyncGemm<CuStage, ElementI
                                                         SmArch, ShapeMMAThreadBlock,
                                                         ShapeMMAWarp, ShapeMMAOp,
                                                         EpilogueOp, 
-                                                        cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>, 
+                                                        cutlass::gemm::threadblock::CuSyncGemmIdentityThreadblockSwizzle<>,
                                                         2, 8, 8, splitK> {};
 
 using CuSyncGemm1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, false>;
