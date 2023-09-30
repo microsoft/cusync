@@ -969,7 +969,6 @@ int run(int argc, char* argv[]) {
 
 #if defined(ROWSYNC)
   using Sync = RowSync;
-  uint waitValue = gridDim1.y;
   RowSync sync(gridDim1.y);
 #elif defined(TILEBATCH)
   using Sync = TileSync<2>;

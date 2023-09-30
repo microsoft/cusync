@@ -17,6 +17,8 @@ import json
 from statistics import stdev
 
 def getAllTimes(s, START, END):
+  '''Parse output of binaries to obtain list of times
+  '''
   alltimes = {}
   assert START in s
   assert END in s
@@ -48,13 +50,16 @@ def slurp(path):
   with open(path, "r") as f:
     return f.read()
 
+def buildDir(f):
+  return 'build/'+f
+
 def getStreamKTimes(output):
   runtime = re.findall(r'\s*Avg runtime: ([\d\.]+)', output)
   return float(runtime[0])
 
 def genAndMakeStreamK(batchInfo):
   inFile = "streamk.cu"
-  outFile = "streamk-eval.cu"
+  outFile = buildDir("streamk-eval.cu")
   tilesCode = """using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<%d, %d, %d>;  
 using ShapeMMAWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
   tilesCode = tilesCode % tuple(batchInfo["TileSizes"])
@@ -73,9 +78,9 @@ def deleteFiles(syncPolicies, attention_or_mlp):
   command = "rm -f "
   for policy in syncPolicies:
     if attention_or_mlp == 'attention' and policy == 'stridedsync':
-      command += "%s-%s-eval-%s "%(attention_or_mlp, model, policy)
+      command += buildDir("%s-%s-eval-%s "%(attention_or_mlp, model, policy))
     else:
-      command += "%s-eval-%s "%(attention_or_mlp, policy)
+      command += buildDir("%s-eval-%s "%(attention_or_mlp, policy))
   
   (s,o) = subprocess.getstatusoutput(command)
 
@@ -87,9 +92,9 @@ def makeFiles(syncPolicies, attention_or_mlp):
   command = "make "
   for policy in syncPolicies:
     if attention_or_mlp == 'attention' and policy == 'stridedsync':
-      command += "%s-%s-eval-%s "%(attention_or_mlp, model, policy)
+      command += buildDir("%s-%s-eval-%s "%(attention_or_mlp, model, policy))
     else:
-      command += "%s-eval-%s "%(attention_or_mlp, policy)
+      command += buildDir("%s-eval-%s "%(attention_or_mlp, policy))
 
   flags = "-j"
   command += flags
@@ -101,7 +106,7 @@ def makeFiles(syncPolicies, attention_or_mlp):
   
 def genFiles(batchInfo, syncPolicy, attention_or_mlp):
   inMLPFile = "mlp.cu" if attention_or_mlp == "mlp" else "attention.cu"
-  outMLPFile = attention_or_mlp + "-eval-" + syncPolicy + ".cu"
+  outMLPFile = buildDir(attention_or_mlp + "-eval-" + syncPolicy + ".cu")
   tilesCode = """using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<%d, %d, %d>;  
 using ShapeMMAWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
   tilesCode = tilesCode % tuple(batchInfo["TileSizes"])
@@ -116,9 +121,9 @@ using ShapeMMAWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
   optimizationsEnd = mlpFileContents.find("//</OPTIMIZATIONS>")
   optimizationsCode = ""
   if model == "GPT3".lower():
-    optimizationsCode += "#define GPT3\n"
+    optimizationsCode += f"#define {attention_or_mlp.upper()}_GPT3\n"
   elif model == "LLAMA".lower():
-    optimizationsCode += "#define LLAMA\n"
+    optimizationsCode += f"#define {attention_or_mlp.upper()}_LLAMA\n"
 
   if syncPolicy != 'baseline':
     if "AvoidCustomOrder" in batchInfo and batchInfo["AvoidCustomOrder"] == True:
@@ -662,7 +667,7 @@ for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]: #
 
     genAndMakeStreamK(tiles[m])
     if model == 'gpt3' or (model == 'llama' and attention_or_mlp == 'attention'):
-      streamk_command = f"./streamk-eval --m={m} --alpha=1 --beta=0 --iterations=20 "
+      streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
       (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
       if s != 0:
         print("StreamK Error")
@@ -679,7 +684,7 @@ for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]: #
       total = firstGeMMStreamK + secondGeMMStreamK
       print(f'{m} & {H} & {"streamk"} & {"%.2f"%(firstGeMMStreamK*1000)} & {"%.2f"%(secondGeMMStreamK*1000)} & {"%.2f"%(total*1000)}')
     elif model == 'llama' and attention_or_mlp == 'mlp':
-      streamk_command = f"./streamk-eval --m={m} --alpha=1 --beta=0 --iterations=20 "
+      streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
       (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
       if s != 0:
         print("StreamK Error")
@@ -714,7 +719,7 @@ for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]: #
 
   makeFiles(policies+['baseline'], attention_or_mlp)
   
-  baselineCommand = f"./{attention_or_mlp}-eval-baseline --batch {m} --check false --model {model.lower()}"
+  baselineCommand = buildDir(f"{attention_or_mlp}-eval-baseline") + f" --batch {m} --check false --model {model.lower()}"
   (s, o) = subprocess.getstatusoutput(baselineCommand + f" --split-k1 {tiles[m]['baseline']['split_ks'][0]}" + f" --split-k2 {tiles[m]['baseline']['split_ks'][1]}")
   # print(o)
   if "Invalid" in o:
@@ -731,7 +736,7 @@ for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]: #
     baselineDone = True
 
   for syncPolicy in policies:
-    command = f"./{attention_or_mlp}-eval-{syncPolicy} --batch {m} --check false --model {model.lower()}"
+    command = buildDir(f"{attention_or_mlp}-eval-{syncPolicy}") + f" --batch {m} --check false --model {model.lower()}"
 
     splitKs = tiles[m]["tilesync"] if syncPolicy == "stridedsync" else tiles[m][syncPolicy] 
     (s, o) = subprocess.getstatusoutput(command + f" --split-k1 {splitKs['split_ks'][0]}" + f" --split-k2 {splitKs['split_ks'][1]}")
