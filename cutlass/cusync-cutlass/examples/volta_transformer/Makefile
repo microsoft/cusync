@@ -1,4 +1,4 @@
-NVCC=/usr/local/cuda-11.6/bin/nvcc -std=c++17
+NVCC=/usr/local/cuda-12.2/bin/nvcc -std=c++17
 ROOT=../../../../
 CUSYNC=$(ROOT)/src/include
 NV_CUTLASS=$(ROOT)/cutlass/nvidia-cutlass

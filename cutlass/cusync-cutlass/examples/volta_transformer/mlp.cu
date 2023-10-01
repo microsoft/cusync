@@ -146,11 +146,6 @@ using GemmSplitK1 = BaseMLPGemm<EpilogueOp1, true>;
 using GemmSplitK2 = BaseMLPGemm<EpilogueOp2, true>;
 
 //CuSync GeMMs
-using CuSyncImpl = CuSync<ProdCuStage, ConsCuStage>;
-
-using CuSyncImpl1 = CuSync<ProdCuStage, MiddleCuStage>;
-using CuSyncImpl2 = CuSync<MiddleCuStage, ConsCuStage>;
-
 template<typename CuStage, typename EpilogueOp, bool splitK>
 class CuSyncMLPGemm : public cutlass::gemm::device::CuSyncGemm<CuStage, ElementInputA, LayoutInputA, 
                                                        ElementInputB, LayoutInputB,
@@ -590,13 +585,13 @@ cudaError_t runBaselineLLaMA(int split_k1, int split_k2,
 /*CuSync GPT-3 MLP*/
 template<typename GemmTy1, typename GemmTy2>
 cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
-                      MLPParameters& mlpParams,
-                      CuSyncImpl& handle,
-                      cudaStream_t producer_stream, 
-                      cudaStream_t consumer_stream,
-                      double& execTime,
-                      int iters = 100) {
-  typename GemmTy1::Arguments args1{handle.prod(),
+                          MLPParameters& mlpParams,
+                          ProdCuStage& prod, ConsCuStage& cons,
+                          cudaStream_t producer_stream, 
+                          cudaStream_t consumer_stream,
+                          double& execTime,
+                          int iters = 100) {
+  typename GemmTy1::Arguments args1{prod,
                                      mlpParams.gemm_size1,
                                      mlpParams.x.device_ref(),
                                      mlpParams.w1.device_ref(),
@@ -612,7 +607,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   status = gemm_op1.initialize(args1, workspace1.get());
   CUTLASS_CHECK(status);
 
-  typename GemmTy2::Arguments args2{handle.cons(),
+  typename GemmTy2::Arguments args2{cons,
                                     mlpParams.gemm_size2,  
                                     mlpParams.xw1.device_ref(),
                                     mlpParams.w2.device_ref(),
@@ -632,8 +627,8 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   execTime = 0;
   
   for (int r = 0; r < iters; r++) {
-    handle.prod().iter += 1;
-    handle.cons().iter += 1;
+    prod.iter += 1;
+    cons.iter += 1;
     gemm_op2.params_.custage.iter += 1;
     gemm_op1.params_.custage.iter += 1;
     
@@ -643,8 +638,9 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
     // CUDA_CHECK(cudaDeviceSynchronize());
   #ifndef AVOID_WAIT_KERNEL
-    handle.invokeWaitKernel(consumer_stream);
+    prod.invokeWaitKernel(consumer_stream);
   #endif  
+
     status = gemm_op2.run(true, NULL, consumer_stream);
     CUTLASS_CHECK(status);
     CUDA_CHECK(cudaDeviceSynchronize());
@@ -658,20 +654,20 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 }
 
 cudaError_t runCuSyncGPT3(int split_k1, int split_k2, MLPParameters& mlpParams,
-                      CuSyncImpl& handle,
-                      cudaStream_t producer_stream, cudaStream_t consumer_stream,
-                      double& execTime, int iters = 100) {
+                          ProdCuStage& prod, ConsCuStage& cons,
+                          cudaStream_t producer_stream, cudaStream_t consumer_stream,
+                          double& execTime, int iters = 100) {
   cudaError_t result;
   execTime = 0;
 
   if (split_k1 == 1 && split_k2 == 1) {
-    result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, handle, producer_stream, consumer_stream, execTime, iters);
+    result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
   } else if (split_k1 > 1 && split_k2 == 1) {
-    result = runCuSyncGPT3<CuSyncGemmSplitK1, CuSyncGemm2>(split_k1, split_k2, mlpParams, handle, producer_stream, consumer_stream, execTime, iters);
+    result = runCuSyncGPT3<CuSyncGemmSplitK1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
   } else if (split_k1 == 1 && split_k2 > 1) {
-    result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, handle, producer_stream, consumer_stream, execTime, iters);
+    result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
   } else {
-    result = runCuSyncGPT3<CuSyncGemmSplitK1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, handle, producer_stream, consumer_stream, execTime, iters);
+    result = runCuSyncGPT3<CuSyncGemmSplitK1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
   }
 
   return result;
@@ -703,12 +699,11 @@ __global__ void cusyncgluKernel(uint M, T* xvw1, T* glu, MiddleCuStage cons1, Mi
 template<typename GemmTy1, typename GemmTy2>
 cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
                            MLPParameters& mlpParams,
-                           CuSyncImpl1& handle1,
-                           CuSyncImpl2& handle2,
+                           ProdCuStage& prod, MiddleCuStage& mid, ConsCuStage& cons,
                            cudaStream_t* streams,
                            double& execTime,
                            int iters = 100) {
-  typename GemmTy1::Arguments argsXW1{handle1.prod(),
+  /*typename GemmTy1::Arguments argsXW1{prod,
                                       mlpParams.gemm_size1,
                                       mlpParams.x.device_ref(),
                                       mlpParams.w1.device_ref(),
@@ -724,7 +719,7 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
   status = gemm_opXVW1.initialize(argsXW1, workspace1.get());
   CUTLASS_CHECK(status);
 
-  typename GemmTy2::Arguments argsXW12{handle2.cons(),
+  typename GemmTy2::Arguments argsXW12{cons,
                                        mlpParams.gemm_size2,  
                                        mlpParams.xvw1.device_ref(),
                                        mlpParams.w2.device_ref(),
@@ -778,27 +773,26 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
     execTime += end-start;
   }
 
-  return cudaSuccess;
+  return cudaSuccess;*/
 }
 
 cudaError_t runCuSyncLLaMA(int split_k1, int split_k2, 
                           MLPParameters& mlpParams,
-                          CuSyncImpl1& handle1,
-                          CuSyncImpl2& handle2,
+                          ProdCuStage& prod, MiddleCuStage& mid, ConsCuStage& cons,
                           cudaStream_t* streams,
                           double& execTime, int iters = 100) {
   cudaError_t result;
   execTime = 0;
 
-  if (split_k1 == 1 && split_k2 == 1) {
-    result = runCuSyncLLaMA<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
-  } else if (split_k1 > 1 && split_k2 == 1) {
-    result = runCuSyncLLaMA<CuSyncGemmSplitK1, CuSyncGemm2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
-  } else if (split_k1 == 1 && split_k2 > 1) {
-    result = runCuSyncLLaMA<CuSyncGemm1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
-  } else {
-    result = runCuSyncLLaMA<CuSyncGemmSplitK1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
-  }
+  // if (split_k1 == 1 && split_k2 == 1) {
+  //   result = runCuSyncLLaMA<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
+  // } else if (split_k1 > 1 && split_k2 == 1) {
+  //   result = runCuSyncLLaMA<CuSyncGemmSplitK1, CuSyncGemm2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
+  // } else if (split_k1 == 1 && split_k2 > 1) {
+  //   result = runCuSyncLLaMA<CuSyncGemm1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
+  // } else {
+  //   result = runCuSyncLLaMA<CuSyncGemmSplitK1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, handle1, handle2, streams, execTime, iters);
+  // }
 
   return result;
 }
@@ -999,13 +993,11 @@ int run(int argc, char* argv[]) {
 
     prod.iter = cons.iter = 0;
 
-    CuSyncImpl cuSyncHandle(prod, cons);
+    initProducerConsumer(prod, cons);
     
     double overlapTime = 0;
-    cuSyncHandle.iter = 0;
-    cuSyncHandle.prod().iter = cuSyncHandle.cons().iter = 0;
-
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, cuSyncHandle, producer_stream, consumer_stream, overlapTime, 1);
+    
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, 1);
 
     CUDA_CHECK(cudaDeviceSynchronize());
     if (doChecking) {
@@ -1015,12 +1007,12 @@ int run(int argc, char* argv[]) {
       }
     }
 
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, cuSyncHandle, producer_stream, consumer_stream, overlapTime, warmup);
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup);
     
     CUDA_CHECK(cudaDeviceSynchronize());
     printf("START-OVERLAPPED:\n");
     
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, cuSyncHandle, producer_stream, consumer_stream, overlapTime, epochs);
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, epochs);
     
     CUDA_CHECK(result);
     printf("END-OVERLAPPED:\n");
@@ -1036,15 +1028,13 @@ int run(int argc, char* argv[]) {
 #else
   #error "Unknown Policy"
 #endif
+/*
     ProdCuStage prod(gridDim1, tileSize, sync);
     dim3 gridMiddle = {(uint)DIVUP(mlpParams.gemm_size1.m(), GLURowTile), 1, 1};
     MiddleCuStage middle(gridMiddle, {GLURowTile, 1, 1}, sync);
     ConsCuStage cons(gridDim2, tileSize, sync2);
 
     prod.iter = cons.iter = middle.iter = 0;
-
-    CuSyncImpl1 cuSyncHandle1(prod, middle);
-    CuSyncImpl2 cuSyncHandle2(middle, cons);
     
     double overlapTime = 0;
     cuSyncHandle1.iter = 0;
@@ -1055,7 +1045,7 @@ int run(int argc, char* argv[]) {
     // cuSyncHandle2.prod().setTileStatusToWait(cuSyncHandle1.cons().getTileStatusToWait());
     cuSyncHandle1.cons().kernelExecuted_ = cuSyncHandle2.prod().kernelExecuted_;
 
-    result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, cuSyncHandle1, cuSyncHandle2, streams, overlapTime, 1);
+    result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, , streams, overlapTime, 1);
 
     CUDA_CHECK(cudaDeviceSynchronize());
     if (doChecking) {
@@ -1076,6 +1066,7 @@ int run(int argc, char* argv[]) {
     printf("END-OVERLAPPED:\n");
     
     printf("Average time %lf microseconds\n", overlapTime/(float)epochs);
+*/
   }
 
   return 0;

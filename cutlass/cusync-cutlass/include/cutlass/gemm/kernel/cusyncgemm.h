@@ -51,7 +51,7 @@ namespace kernel {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <
-  typename CuStageImpl2,
+  typename CuStageImpl,
   typename Mma_,                  ///! Threadblock-scoped matrix multiply-accumulate 
   typename Epilogue_,             ///! Epilogue
   typename ThreadblockSwizzle_,   ///! Threadblock swizzling function
@@ -71,7 +71,7 @@ struct CuSyncGemm {
 
   /// Parameters structure
   struct Params {
-    CuStageImpl2 custage;
+    CuStageImpl custage;
     cutlass::gemm::GemmCoord problem_size;
     cutlass::gemm::GemmCoord grid_tiled_shape;
     int swizzle_log_tile;
@@ -100,7 +100,7 @@ struct CuSyncGemm {
 
     CUTLASS_HOST_DEVICE
     Params(
-      CuStageImpl2 custage,
+      CuStageImpl custage,
       cutlass::gemm::GemmCoord const & problem_size,
       cutlass::gemm::GemmCoord const & grid_tiled_shape,
       typename Mma::IteratorA::TensorRef ref_A,
@@ -203,13 +203,10 @@ struct CuSyncGemm {
     return Status::kSuccess;
   }
 
-  CUTLASS_DEVICE
-  void operator()(Params &params, SharedStorage &shared_storage) {}
-
   //TODO: Had to make Params non-const, does that have any perf issue?
   CUTLASS_DEVICE
-  void run_overlap_gemm(Params &params, SharedStorage &shared_storage) {
-    CuStageImpl2& stage = params.custage; //(isProducerOrConsumer) ? params.syncHandle.prod() : params.syncHandle.cons();
+  void operator()(Params &params, SharedStorage &shared_storage) {
+    CuStageImpl& stage = params.custage; //(isProducerOrConsumer) ? params.syncHandle.prod() : params.syncHandle.cons();
     dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     
     uint block_idx_y = new_block_idx.y;
@@ -223,7 +220,7 @@ struct CuSyncGemm {
 
     // Compute threadblock location
     cutlass::gemm::GemmCoord threadblock_tile_offset =
-        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z, true);
+        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z);
 
     // Early exit if CTA is out of range
     // if (params.grid_tiled_shape.m() <= threadblock_tile_offset.m() ||
@@ -308,7 +305,7 @@ struct CuSyncGemm {
     //
 
     threadblock_tile_offset =
-        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z, true);
+        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z);
 
     //assume identity swizzle
     MatrixCoord threadblock_offset(

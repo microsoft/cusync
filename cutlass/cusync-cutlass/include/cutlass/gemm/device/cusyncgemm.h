@@ -167,7 +167,7 @@ namespace device {
     class Gemm;
 */
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA_,
     /// Layout type for A matrix operand
@@ -262,7 +262,7 @@ class CuSyncGemm {
   static ComplexTransform const kTransformB = ComplexTransform::kNone;
 
   /// Define the kernel
-  using GemmKernel = typename kernel::DefaultCuSyncGemm<CuStageImpl2,
+  using GemmKernel = typename kernel::DefaultCuSyncGemm<CuStageImpl,
     ElementA,
     LayoutA,
     kAlignmentA,
@@ -295,7 +295,7 @@ class CuSyncGemm {
     //
     // Data members
     //
-    CuStageImpl2 custage;
+    CuStageImpl custage;
     GemmCoord problem_size;
     TensorRef<ElementA const, LayoutA> ref_A;
     TensorRef<ElementB const, LayoutB> ref_B;
@@ -321,7 +321,7 @@ class CuSyncGemm {
     /// Constructs an Arguments structure 
     CUTLASS_HOST_DEVICE
     Arguments(
-      CuStageImpl2 custage_,
+      CuStageImpl custage_,
       GemmCoord problem_size_,
       TensorRef<ElementA const, LayoutA> ref_A_,
       TensorRef<ElementB const, LayoutB> ref_B_,
@@ -602,7 +602,7 @@ public:
 
 /// Partial specialization for column-major output exchanges problem size and operand.
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA_,
     /// Layout type for A matrix operand
@@ -648,7 +648,7 @@ template <
     /// Permute result D
     typename PermuteDLayout
 >
-class CuSyncGemm<CuStageImpl2, ElementA_, LayoutA_, ElementB_, LayoutB_, ElementC_,
+class CuSyncGemm<CuStageImpl, ElementA_, LayoutA_, ElementB_, LayoutB_, ElementC_,
            layout::ColumnMajor,  // partially specialized on LayoutC
            ElementAccumulator_, OperatorClass_, ArchTag_, ThreadblockShape_,
            WarpShape_, InstructionShape_, EpilogueOutputOp_,
@@ -682,7 +682,7 @@ class CuSyncGemm<CuStageImpl2, ElementA_, LayoutA_, ElementB_, LayoutB_, Element
   static ComplexTransform const kTransformB = ComplexTransform::kNone;
   static bool const kSplitKSerial = SplitKSerial;
 
-  using UnderlyingOperator = CuSyncGemm<CuStageImpl2,
+  using UnderlyingOperator = CuSyncGemm<CuStageImpl,
     ElementB,
     typename layout::LayoutTranspose<LayoutB>::type,
     ElementA,
@@ -718,7 +718,7 @@ class CuSyncGemm<CuStageImpl2, ElementA_, LayoutA_, ElementB_, LayoutB_, Element
     //
     // Data members
     //
-    CuStageImpl2 custage;
+    CuStageImpl custage;
     GemmCoord problem_size;
     TensorRef<ElementA const, LayoutA> ref_A;
     TensorRef<ElementB const, LayoutB> ref_B;
@@ -742,7 +742,7 @@ class CuSyncGemm<CuStageImpl2, ElementA_, LayoutA_, ElementB_, LayoutB_, Element
     /// Constructs an Arguments structure 
     CUTLASS_HOST_DEVICE
     Arguments(
-      CuStageImpl2 custage_,
+      CuStageImpl custage_,
       GemmCoord problem_size_,
       TensorRef<ElementA const, LayoutA> ref_A_,
       TensorRef<ElementB const, LayoutB> ref_B_,

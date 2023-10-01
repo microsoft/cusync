@@ -482,37 +482,6 @@ struct CuStage {
 };
 
 template<typename Stage1, typename Stage2>
-struct CuSync {
-  Stage1 prod_;
-  __host__ Stage1& prod() {return prod_;}
-  Stage2 cons_;
-  __host__ Stage2& cons() {return cons_;}
-
-  volatile uint* tileStatus;
-  int* kernelExecuted;
-  int iter;
-
-  __device__ __host__ CuSync() {}
-
-  void invokeWaitKernel(cudaStream_t stream) {
-    waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted, prod().iter);
-  }
-
-  CuSync(Stage1 prod, Stage2 cons): prod_(prod), cons_(cons) {
-    if (prod.getTileStatusToPost() == nullptr) {
-      printf("tileStatusToPost is null\n");
-      abort();
-    }
-    iter = 0;
-    cons_.prodGrid_ = prod.grid_;
-    cons_.setTileStatusToWait(prod_.getTileStatusToPost());
-    CUDA_CHECK(cudaMalloc(&kernelExecuted, sizeof(int)));
-    CUDA_CHECK(cudaMemset(kernelExecuted, 0, sizeof(int)));
-    prod_.kernelExecuted_ = kernelExecuted;
-  }
-};
-
-template<typename Stage1, typename Stage2>
 void initProducerConsumer(Stage1& prod, Stage2& cons) {
   assert(prod.isProducer());
   assert(cons.isConsumer());

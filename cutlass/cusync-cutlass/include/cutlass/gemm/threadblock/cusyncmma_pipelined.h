@@ -89,7 +89,7 @@ template <
   /// Used for partial specialization
   typename Enable = bool
 >
-class MmaPipelined : public MmaBase<Shape_, Policy_, 2> {
+class CuSyncMmaPipelined : public MmaBase<Shape_, Policy_, 2> {
 public:
 
   ///< Base class
@@ -133,8 +133,8 @@ public:
   /// Complex transform on B operand
   static ComplexTransform const kTransformB = Operator::kTransformB;
 
-  // staticaly assert kStages for MmaPipelined is two (Double-buffered pipeline)
-  static_assert((Base::kStages==2), "MmaPipelined requires kStages set to value 2");
+  // staticaly assert kStages for CuSyncMmaPipelined is two (Double-buffered pipeline)
+  static_assert((Base::kStages==2), "CuSyncMmaPipelined requires kStages set to value 2");
 
 protected:
 
@@ -164,7 +164,7 @@ public:
 
   /// Construct from tensor references
   CUTLASS_DEVICE
-  MmaPipelined(
+  CuSyncMmaPipelined(
     typename Base::SharedStorage &shared_storage,       ///< Shared storage needed for internal use by threadblock-scoped GEMM
     int thread_idx,                                     ///< ID within the threadblock
     int warp_idx,                                       ///< ID of warp

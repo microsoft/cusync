@@ -56,7 +56,7 @@
 #include "cutlass/gemm/threadblock/default_mma_core_sm75.h"
 #include "cutlass/gemm/threadblock/default_mma_core_sm70.h"
 #include "cutlass/gemm/threadblock/default_mma_core_sm80.h"
-#include "cutlass/gemm/threadblock/default_mma.h"
+#include "cutlass/gemm/threadblock/default_cusyncmma.h"
 #include "cutlass/gemm/threadblock/default_mma_core_simt.h"
 #include "cutlass/gemm/threadblock/threadblock_swizzle.h"
 
@@ -80,7 +80,7 @@ namespace kernel {
 ////////////////////////////////////////////////////////////////////////////////
 
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA_,
     /// Layout type for A matrix operand
@@ -143,7 +143,7 @@ struct DefaultCuSyncGemm;
 
 /// Partial specialization for Hopper Architecture
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA,
     /// Layout type for A matrix operand
@@ -192,14 +192,14 @@ template <
     /// Permute operand B
     typename PermuteBLayout
 >
-struct DefaultCuSyncGemm<CuStageImpl2, ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementC,
+struct DefaultCuSyncGemm<CuStageImpl, ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementC,
                    layout::RowMajor, ElementAccumulator, arch::OpClassTensorOp,
                    arch::Sm90, ThreadblockShape, WarpShape, InstructionShape,
                    EpilogueOutputOp, ThreadblockSwizzle, Stages, SplitKSerial,
                    Operator, SharedMemoryClear, GatherA, GatherB, ScatterD,
                    PermuteDLayout, PermuteALayout, PermuteBLayout> {
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
       ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, arch::Sm90,
       ThreadblockShape, WarpShape, InstructionShape, Stages,
@@ -215,14 +215,14 @@ struct DefaultCuSyncGemm<CuStageImpl2, ElementA, LayoutA, kAlignmentA, ElementB,
           EpilogueOutputOp::kCount, ScatterD, PermuteDLayout>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Ampere Architecture
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA,
     /// Layout type for A matrix operand
@@ -273,7 +273,7 @@ template <
     /// Permute operand B
     typename PermuteBLayout
 >
-struct DefaultCuSyncGemm<CuStageImpl2, ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementC,
+struct DefaultCuSyncGemm<CuStageImpl, ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementC,
                    LayoutC, ElementAccumulator, arch::OpClassTensorOp,
                    arch::Sm80, ThreadblockShape, WarpShape, InstructionShape,
                    EpilogueOutputOp, ThreadblockSwizzle, Stages, SplitKSerial,
@@ -285,7 +285,7 @@ struct DefaultCuSyncGemm<CuStageImpl2, ElementA, LayoutA, kAlignmentA, ElementB,
              "Epilogue in the kernel level must be row major");
 
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
       ElementAccumulator, LayoutC, arch::OpClassTensorOp, arch::Sm80,
       ThreadblockShape, WarpShape, InstructionShape, Stages,
@@ -310,14 +310,14 @@ struct DefaultCuSyncGemm<CuStageImpl2, ElementA, LayoutA, kAlignmentA, ElementB,
                                                   Affine2Epilogue>::type;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Turing Architecture
 template <
-  typename CuStageImpl2,
+  typename CuStageImpl,
   /// Element type for A matrix operand
   typename ElementA,
   /// Layout type for A matrix operand
@@ -364,7 +364,7 @@ template <
   typename PermuteBLayout
 >
 struct DefaultCuSyncGemm<
-  CuStageImpl2,
+  CuStageImpl,
   ElementA, LayoutA, kAlignmentA,
   ElementB, LayoutB, kAlignmentB,
   ElementC, layout::RowMajor,
@@ -389,7 +389,7 @@ struct DefaultCuSyncGemm<
 > {
 
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
     ElementA,
     LayoutA,
     kAlignmentA,
@@ -427,14 +427,14 @@ struct DefaultCuSyncGemm<
   >::Epilogue;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Ampere Integer Matrix Multiply Interleaved layout
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA,
     /// Access granularity of A matrix in units of elements
@@ -466,7 +466,7 @@ template <
     typename Operator,
     /// Use zfill or predicate for out-of-bound cp.async
     SharedMemoryClearOption SharedMemoryClear>
-struct DefaultCuSyncGemm<CuStageImpl2,
+struct DefaultCuSyncGemm<CuStageImpl,
     ElementA, layout::ColumnMajorInterleaved<InterleavedK>, kAlignmentA,
     ElementB, layout::RowMajorInterleaved<InterleavedK>, kAlignmentB, ElementC,
     layout::ColumnMajorInterleaved<InterleavedK>, int32_t,
@@ -481,7 +481,7 @@ struct DefaultCuSyncGemm<CuStageImpl2,
   using ElementAccumulator = int32_t;
 
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
       ElementAccumulator, LayoutC, arch::OpClassTensorOp, arch::Sm80,
       ThreadblockShape, WarpShape, InstructionShape, Stages, Operator,
@@ -496,14 +496,14 @@ struct DefaultCuSyncGemm<CuStageImpl2,
           64 / sizeof_bits<ElementC>::value, InterleavedK>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Turing Integer Matrix Multiply Interleaved layout
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA,
     /// Access granularity of A matrix in units of elements
@@ -533,7 +533,7 @@ template <
     typename Operator,
     /// Use zfill or predicate for out-of-bound cp.async
     SharedMemoryClearOption SharedMemoryClear>
-struct DefaultCuSyncGemm<CuStageImpl2, ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
+struct DefaultCuSyncGemm<CuStageImpl, ElementA, layout::ColumnMajorInterleaved<InterleavedK>,
                    kAlignmentA, ElementB,
                    layout::RowMajorInterleaved<InterleavedK>, kAlignmentB,
                    ElementC, layout::ColumnMajorInterleaved<InterleavedK>,
@@ -549,7 +549,7 @@ struct DefaultCuSyncGemm<CuStageImpl2, ElementA, layout::ColumnMajorInterleaved<
   using ElementAccumulator = int32_t;
 
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB, ElementAccumulator, LayoutC,
       arch::OpClassTensorOp, arch::Sm75, ThreadblockShape, WarpShape,
       InstructionShape, 2, Operator, true>::ThreadblockMma;
@@ -563,14 +563,14 @@ struct DefaultCuSyncGemm<CuStageImpl2, ElementA, layout::ColumnMajorInterleaved<
           64 / sizeof_bits<ElementC>::value, InterleavedK>::Epilogue;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Volta architecture
 template <
-  typename CuStageImpl2,
+  typename CuStageImpl,
   /// Element type for A matrix operand
   typename ElementA,
   /// Layout type for A matrix operand
@@ -614,7 +614,7 @@ template <
   /// Permute operand B
   typename PermuteBLayout
 >
-struct DefaultCuSyncGemm<CuStageImpl2,
+struct DefaultCuSyncGemm<CuStageImpl,
   ElementA, LayoutA, kAlignmentA,
   ElementB, LayoutB, kAlignmentB,
   ElementC, layout::RowMajor,
@@ -639,7 +639,7 @@ struct DefaultCuSyncGemm<CuStageImpl2,
 > {
 
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
     ElementA,
     LayoutA,
     kAlignmentA,
@@ -677,14 +677,14 @@ struct DefaultCuSyncGemm<CuStageImpl2,
   >::Epilogue;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for SIMT
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA,
     /// Layout type for A matrix operand
@@ -732,7 +732,7 @@ template <
     /// Permute operand B
     typename PermuteBLayout
   >
-struct DefaultCuSyncGemm<CuStageImpl2,
+struct DefaultCuSyncGemm<CuStageImpl,
     ElementA,
     LayoutA,
     kAlignmentA,
@@ -766,7 +766,7 @@ struct DefaultCuSyncGemm<CuStageImpl2,
              "Epilogue in the kernel level must be row major");
 
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA,
       LayoutA,
       kAlignmentA,
@@ -815,14 +815,14 @@ struct DefaultCuSyncGemm<CuStageImpl2,
                                                   Affine2Epilogue>::type;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Partial specialization for Ampere
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Element type for A matrix operand
     typename ElementA,
     /// Layout type for A matrix operand
@@ -870,7 +870,7 @@ template <
     /// Permute operand B
     typename PermuteBLayout
 >
-struct DefaultCuSyncGemm<CuStageImpl2, ElementA,
+struct DefaultCuSyncGemm<CuStageImpl, ElementA,
                    LayoutA,
                    kAlignmentA,
                    ElementB,
@@ -902,7 +902,7 @@ struct DefaultCuSyncGemm<CuStageImpl2, ElementA,
              "Epilogue in the kernel level must be row major");
 
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
       ElementAccumulator, LayoutC, arch::OpClassSimt, arch::Sm80,
       ThreadblockShape, WarpShape, GemmShape<1, 1, 1>, Stages,
@@ -935,14 +935,14 @@ struct DefaultCuSyncGemm<CuStageImpl2, ElementA,
                                                   Affine2Epilogue>::type;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>; 
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>; 
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Partial specialization for SIMT DP4A
 
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     /// Layout type for A matrix operand
     typename LayoutA,
     /// Access granularity of A matrix in units of elements
@@ -975,7 +975,7 @@ template <
     /// Use zfill or predicate for out-of-bound cp.async
     SharedMemoryClearOption SharedMemoryClear
 >
-struct DefaultCuSyncGemm<CuStageImpl2, int8_t, LayoutA, kAlignmentA, int8_t, LayoutB, kAlignmentB,
+struct DefaultCuSyncGemm<CuStageImpl, int8_t, LayoutA, kAlignmentA, int8_t, LayoutB, kAlignmentB,
                    ElementC, LayoutC, ElementAccumulator, arch::OpClassSimt,
                    ArchTag, ThreadblockShape, WarpShape, GemmShape<1, 1, 4>,
                    EpilogueOutputOp, ThreadblockSwizzle, 2, SplitKSerial,
@@ -987,7 +987,7 @@ struct DefaultCuSyncGemm<CuStageImpl2, int8_t, LayoutA, kAlignmentA, int8_t, Lay
 
   using OperatorClass =  arch::OpClassSimt;
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA,
       LayoutA,
       kAlignmentA,
@@ -1017,14 +1017,14 @@ struct DefaultCuSyncGemm<CuStageImpl2, int8_t, LayoutA, kAlignmentA, int8_t, Lay
       >::Epilogue;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 
 #if defined(CUTLASS_ARCH_WMMA_ENABLED)
 ////////////////////////////////////////////////////////////////////////////////
 /// Partial specialization for Wmma Gemm Kernel
 template <
-    typename CuStageImpl2,
+    typename CuStageImpl,
     ///< Element type for A matrix operand
     typename ElementA,
     /// Layout type for A matrix operand
@@ -1065,7 +1065,7 @@ template <
     /// Use zfill or predicate for out-of-bound cp.async
     SharedMemoryClearOption SharedMemoryClear
 > 
-struct DefaultCuSyncGemm<CuStageImpl2,
+struct DefaultCuSyncGemm<CuStageImpl,
   ElementA, LayoutA, kAlignmentA, 
   ElementB, LayoutB, kAlignmentB, 
   ElementC, LayoutC, 
@@ -1086,7 +1086,7 @@ struct DefaultCuSyncGemm<CuStageImpl2,
   layout::NoPermute
 > {
   /// Define the threadblock-scoped matrix multiply-accumulate
-  using Mma = typename cutlass::gemm::threadblock::DefaultMma<
+  using Mma = typename cutlass::gemm::threadblock::DefaultCuSyncMma<
       ElementA, LayoutA, kAlignmentA,
       ElementB, LayoutB, kAlignmentB,
       ElementAccumulator, LayoutC, 
@@ -1110,7 +1110,7 @@ struct DefaultCuSyncGemm<CuStageImpl2,
   >::Epilogue;
 
   /// Define the kernel-level GEMM operator.
-  using GemmKernel = kernel::CuSyncGemm<CuStageImpl2, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+  using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
 };
 ////////////////////////////////////////////////////////////////////////////////
 

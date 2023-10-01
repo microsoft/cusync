@@ -53,6 +53,9 @@ def slurp(path):
 def buildDir(f):
   return 'build/'+f
 
+if not os.path.exists(buildDir("")):
+  os.mkdir(buildDir(""))
+
 def getStreamKTimes(output):
   runtime = re.findall(r'\s*Avg runtime: ([\d\.]+)', output)
   return float(runtime[0])
