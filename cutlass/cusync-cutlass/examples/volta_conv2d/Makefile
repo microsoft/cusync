@@ -1,33 +1,38 @@
-CUTLASS=../../
-CUSYNC=../../../cusync/src/include/
-NVCC=/usr/local/cuda-12.2/bin/nvcc
+ROOT=../../../../
+CUSYNC=$(ROOT)/src/include
+NV_CUTLASS=$(ROOT)/cutlass/nvidia-cutlass
+CUSYNC_CUTLASS=$(ROOT)/cutlass/cusync-cutlass
+NVCC=/usr/local/cuda-12.2/bin/nvcc -std=c++17
 
-INCLUDES=-I$(CUTLASS)/include -I$(CUTLASS)/examples/common -I$(CUTLASS)/tools/util/include -I$(CUSYNC)
+ARCH_FLAGS=-gencode=arch=compute_70,code=[sm_70,compute_70]
+XCOMPILER=-Xcompiler=-fPIE -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing
+BUILD=build
 
-all: conv-rowsync
+INCLUDES=-I$(NV_CUTLASS)/include -I$(NV_CUTLASS)/examples/common -I$(NV_CUTLASS)/tools/util/include -I$(NV_CUTLASS) -I$(CUSYNC_CUTLASS)/include -I$(CUSYNC) -I.
 
-conv-rowsync: turing_tensorop_conv2dfprop.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -x cu ./turing_tensorop_conv2dfprop.cu -DROWSYNC -o $@
+DEFINES=-DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 
 
-conv-tilesync: turing_tensorop_conv2dfprop.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -x cu ./turing_tensorop_conv2dfprop.cu -DTILESYNC -o $@
+$(BUILD)/conv-rowsync: resnet.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS) $< -DROWSYNC -o $@
 
-conv-eval-streamk: conv-eval-baseline.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -DROWSYNC -DSTREAM_K -x cu $< -o $@
+$(BUILD)/conv-tilesync: resnet.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS) $< -DTILESYNC -o $@
 
-conv-eval-baseline: conv-eval-baseline.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -DROWSYNC -x cu $< -o $@
+$(BUILD)/conv-eval-streamk: $(BUILD)/conv-eval-baseline.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS) -DROWSYNC -DSTREAM_K  $< -o $@
 
-conv-eval-rowsync: conv-eval-rowsync.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -x cu $< -o $@
+$(BUILD)/conv-eval-baseline: $(BUILD)/conv-eval-baseline.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS) -DROWSYNC  $< -o $@
 
-conv-eval-tilesync: conv-eval-tilesync.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -x cu $<  -o $@
+$(BUILD)/conv-eval-rowsync: $(BUILD)/conv-eval-rowsync.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS) $< -o $@
+
+$(BUILD)/conv-eval-tilesync: $(BUILD)/conv-eval-tilesync.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS) $<  -o $@
 
 #VGG
+$(BUILD)/vgg-rowsync: vgg.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS)   ./vgg.cu -DROWSYNC -o $@
 
-vgg-rowsync: vgg.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -x cu ./vgg.cu -DROWSYNC -o $@
-
-vgg-tilesync: vgg.cu
-	$(NVCC) -DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass $(INCLUDES)  -O3 -DNDEBUG -Xcompiler=-fPIE   -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0 -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing -gencode=arch=compute_70,code=[sm_70,compute_70] -std=c++17 -x cu ./vgg.cu -DTILESYNC -o $@
+$(BUILD)/vgg-tilesync: vgg.cu
+	$(NVCC)  $(INCLUDES) $(DEFINES) -O3 -DNDEBUG $(XCOMPILER) $(ARCH_FLAGS)   ./vgg.cu -DTILESYNC -o $@

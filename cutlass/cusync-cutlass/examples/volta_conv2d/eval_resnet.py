@@ -6,8 +6,8 @@ import json
 import os
 import sys
 
-resnet_or_vgg = sys.argv[1]
-assert (resnet_or_vgg in ['resent', 'vgg'])
+resnet_or_vgg = sys.argv[1].strip()
+assert resnet_or_vgg in ['resnet', 'vgg']
 
 hw = {
     64: {"h": 56, "w": 56},
@@ -418,10 +418,16 @@ def slurp(path):
   with open(path, "r") as f:
     return f.read()
 
+def buildDir(f):
+  return 'build/'+f
+
+if not os.path.exists(buildDir('')):
+  os.mkdir(buildDir(''))
+
 def deleteFiles(syncPolicies):
   command = "rm -f "
   for policy in syncPolicies:
-    command += "conv-eval-%s "%(policy)
+    command += buildDir("conv-eval-%s "%(policy))
 
   (s,o) = subprocess.getstatusoutput(command)
 
@@ -432,7 +438,7 @@ def deleteFiles(syncPolicies):
 def makeFiles(syncPolicies):
   command = "make "
   for policy in syncPolicies:
-    command += "conv-eval-%s "%(policy)
+    command += buildDir("conv-eval-%s "%(policy))
 
   flags = "-j"
   command += flags
@@ -443,8 +449,8 @@ def makeFiles(syncPolicies):
     sys.exit(0)
 
 def genFiles(batchInfo, syncPolicy):
-  inFile = "turing_tensorop_conv2dfprop.cu" if resnet_or_vgg == 'resnet' else 'vgg.cu'
-  outFile = "conv-eval-" + syncPolicy + ".cu"
+  inFile = resnet_or_vgg + '.cu'
+  outFile = buildDir("conv-eval-" + syncPolicy + ".cu")
   fileContents = slurp(inFile)
   tilesCode = """using ThreadblockShape = cutlass::gemm::GemmShape<%d, %d, %d>;
 using WarpShape = cutlass::gemm::GemmShape<%d, %d, %d>;"""
@@ -505,7 +511,7 @@ for c in ([64,128,256,512] if resnet_or_vgg == 'resnet' else [256,512]): #
       else:
         torchTime = float(o)
         print(f"{m} & {c} & torch & {'%.2f'%torchTime}")
-      (s, o) = subprocess.getstatusoutput("make conv-eval-streamk")
+      (s, o) = subprocess.getstatusoutput(f"make {buildDir('conv-eval-streamk')}")
       if s != 0:
         print(o)
       
@@ -518,14 +524,14 @@ for c in ([64,128,256,512] if resnet_or_vgg == 'resnet' else [256,512]): #
       #   print(f"{m} & {c} & streank & {'%.2f'%avg(streamkTimes)} & {'%.2f'%stdev(streamkTimes)}")
 
 
-    (s, o) = subprocess.getstatusoutput("./conv-eval-baseline " + command_args + " " + split_k)
+    (s, o) = subprocess.getstatusoutput(buildDir("./conv-eval-baseline ") + command_args + " " + split_k)
     baselineTimes = getAllTimes(o, "START-BASELINE", "END-BASELINE")
     bTimes = baselineTimes["Total"]
     print(f"{m} & {c} & baseline & {'%.2f'%avg(bTimes)} & {'%.2f'%stdev(bTimes)}")
 
     for syncType in policies:
       split_k = f"--split_k_slices={tiles[m][c][syncType]['split_k']}"
-      (s, o) = subprocess.getstatusoutput(f"./conv-eval-{syncType} " + command_args + " " + split_k)
+      (s, o) = subprocess.getstatusoutput(buildDir(f"./conv-eval-{syncType} ") + command_args + " " + split_k)
       overlapTimes = getAllTimes(o, "START-OVERLAP", "END-OVERLAP")
       oTimes = overlapTimes["Total"]
       print(f"{m} & {c} & {syncType} & {'%.2f'%avg(bTimes)} & {'%.2f'%stdev(bTimes)} & {'%.2f'%avg(oTimes)} & {'%.2f'%(stdev(oTimes))} & {'%.2f'%((avg(bTimes)-avg(oTimes))*100/avg(bTimes))}")

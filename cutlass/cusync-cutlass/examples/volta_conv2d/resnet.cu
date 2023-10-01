@@ -1,34 +1,3 @@
-/***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- * list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- **************************************************************************************************/
-
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -52,6 +21,7 @@
 #include "cutlass/conv/device/implicit_gemm_convolution.h"
 #include "cutlass/conv/kernel/cusyncdefault_conv2d_fprop.h"
 #include "cutlass/conv/device/cusyncimplicit_gemm_convolution.h"
+#include "cutlass/gemm/threadblock/cusync_threadblock_swizzle.h"
 #include "cutlass/conv/conv2d_problem_size.h"
 #include "cutlass/conv/convolution.h"
 
@@ -123,10 +93,7 @@ using WarpShape = cutlass::gemm::GemmShape<32, 32, 32>;
   using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, Sync>;
 #else
   #error "Unknown Synchronization"
-#endif 
-
-using CuSyncImpl = CuSync<ProdCuStage, ConsCuStage>;
-
+#endif
 
 using InstructionShape = cutlass::gemm::GemmShape<8, 8, 4>;
 
@@ -134,7 +101,7 @@ constexpr int NumStages = 2;
 
 using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
     ElementOutput,
-    8,
+    1,
     ElementAccumulator,
     ElementComputeEpilogue>;
 
@@ -158,48 +125,50 @@ using Conv2dFpropKernel =
                                               SwizzleThreadBlock,
                                               NumStages,
                                               cutlass::arch::OpMultiplyAdd,
-                                              cutlass::conv::IteratorAlgorithm::kAnalytic>::Kernel;
+                                              cutlass::conv::IteratorAlgorithm::kAnalytic,
+                                              cutlass::conv::StrideSupport::kStrided
+                                              >::Kernel;
 
 using BaselineImplicitGemm1 = device::ImplicitGemmConvolution<Conv2dFpropKernel>;
 using BaselineImplicitGemm2 = device::ImplicitGemmConvolution<Conv2dFpropKernel>;
 
-using CuSyncSwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;
+using CuSyncSwizzleThreadBlock = cutlass::gemm::threadblock::CuSyncGemmIdentityThreadblockSwizzle<>;
 
 using ProdConv2dKernel =
   typename kernel::CuSyncDefaultConv2dFprop<ProdCuStage,
-                                                            ElementInputA, LayoutInputA,
-                                                            ElementInputB, LayoutInputB,
-                                                            ElementOutput, LayoutOutput,
-                                                            ElementAccumulator,
-                                                            MMAOp,
-                                                            SmArch,
-                                                            ThreadblockShape,
-                                                            WarpShape,
-                                                            InstructionShape,
-                                                            EpilogueOp,
-                                                            CuSyncSwizzleThreadBlock,
-                                                            NumStages,
-                                                            cutlass::arch::OpMultiplyAdd,
-                                                            cutlass::conv::IteratorAlgorithm::kAnalytic
-                                                          >::Kernel;
+                                            ElementInputA, LayoutInputA,
+                                            ElementInputB, LayoutInputB,
+                                            ElementOutput, LayoutOutput,
+                                            ElementAccumulator,
+                                            MMAOp,
+                                            SmArch,
+                                            ThreadblockShape,
+                                            WarpShape,
+                                            InstructionShape,
+                                            EpilogueOp,
+                                            CuSyncSwizzleThreadBlock,
+                                            NumStages,
+                                            cutlass::arch::OpMultiplyAdd,
+                                            cutlass::conv::IteratorAlgorithm::kAnalytic
+                                          >::Kernel;
 
 using ConsConv2dKernel =
   typename kernel::CuSyncDefaultConv2dFprop<ConsCuStage,
-                                                            ElementInputA, LayoutInputA,
-                                                            ElementInputB, LayoutInputB,
-                                                            ElementOutput, LayoutOutput,
-                                                            ElementAccumulator,
-                                                            MMAOp,
-                                                            SmArch,
-                                                            ThreadblockShape,
-                                                            WarpShape,
-                                                            InstructionShape,
-                                                            EpilogueOp,
-                                                            CuSyncSwizzleThreadBlock,
-                                                            NumStages,
-                                                            cutlass::arch::OpMultiplyAdd,
-                                                            cutlass::conv::IteratorAlgorithm::kAnalytic
-                                                          >::Kernel;
+                                            ElementInputA, LayoutInputA,
+                                            ElementInputB, LayoutInputB,
+                                            ElementOutput, LayoutOutput,
+                                            ElementAccumulator,
+                                            MMAOp,
+                                            SmArch,
+                                            ThreadblockShape,
+                                            WarpShape,
+                                            InstructionShape,
+                                            EpilogueOp,
+                                            CuSyncSwizzleThreadBlock,
+                                            NumStages,
+                                            cutlass::arch::OpMultiplyAdd,
+                                            cutlass::conv::IteratorAlgorithm::kAnalytic
+                                          >::Kernel;
 using ProdCuSyncImplicitGemm1 = device::CuSyncImplicitGemmConvolution<ProdCuStage, ProdConv2dKernel>;
 using ConsCuSyncImplicitGemm2 = device::CuSyncImplicitGemmConvolution<ConsCuStage, ConsConv2dKernel>;
 
@@ -513,13 +482,13 @@ void runBaseline(cutlass::conv::Conv2dProblemSize problem_size,
     auto status = implicit_gemm_op1(args1, workspace1.get(), streams[0]);
 
     CUTLASS_CHECK(status);
-    cudaDeviceSynchronize();
+    CUDA_CHECK(cudaDeviceSynchronize());
     double middle1 = getCurrentTime();
     conv1Time += middle1 - start;
     status = implicit_gemm_op2(args2, workspace2.get(), streams[0]);
 
     CUTLASS_CHECK(status);
-    cudaDeviceSynchronize();
+    CUDA_CHECK(cudaDeviceSynchronize());
     double end = getCurrentTime();
     conv2Time += end - middle1;
     elapsedTime += end - start;
@@ -530,13 +499,13 @@ void runBaseline(cutlass::conv::Conv2dProblemSize problem_size,
 template<typename TensorA, typename TensorB, typename TensorC>
 void runConvolution(cutlass::conv::Conv2dProblemSize problem_size, 
                     const Options& options, cudaStream_t* streams, 
-                    CuSyncImpl& handle,
+                    ProdCuStage& prod, ConsCuStage& cons,
                     TensorA& tensor_x, TensorB& tensor_w1, TensorB& tensor_w2, TensorC& tensor_y1, TensorC& tensor_y2, 
                     double& elapsedTime, double& conv1Time, double& conv2Time, int runs) {
   // Construct ImplicitGemm::Argument structure with conv2d 
   // problem size, data pointers, and epilogue values
   typename ProdCuSyncImplicitGemm1::Arguments args1{
-    handle.prod(),
+    prod,
     problem_size,
     tensor_x.device_ref(),
     tensor_w1.device_ref(),
@@ -554,7 +523,7 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
   CUTLASS_CHECK(status);
 
   typename ConsCuSyncImplicitGemm2::Arguments args2{
-    handle.cons(),
+    cons,
     problem_size,
     tensor_y1.device_ref(),
     tensor_w2.device_ref(),
@@ -572,8 +541,8 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
   CUTLASS_CHECK(status);
 
   for (int i = 0; i < runs; i++) {
-    handle.cons().iter += 1;
-    handle.prod().iter += 1;
+    cons.iter += 1;
+    prod.iter += 1;
     implicit_gemm_op1.params_.custage.iter += 1;
     implicit_gemm_op2.params_.custage.iter += 1;
     double start = getCurrentTime();
@@ -581,8 +550,9 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
   //  waitKernel<<<1,1,0,streams[1]>>>((uint*)&kernelExecuted[0], args1.overlap_handle.iter);
     // CUDA_CHECK(cudaDeviceSynchronize());
     // CUTLASS_CHECK(status);
+    
 #ifndef AVOID_WAIT_KERNEL
-    handle.invokeWaitKernel(streams[1]);
+    prod.invokeWaitKernel(streams[1]);
 #endif
     // cudaDeviceSynchronize();
     // double middle1 = getCurrentTime();
@@ -590,7 +560,7 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
     status = implicit_gemm_op2(streams[1]);
 
     CUTLASS_CHECK(status);
-    cudaDeviceSynchronize();
+    CUDA_CHECK(cudaDeviceSynchronize());
     double end = getCurrentTime();
     // conv2Time += end - middle1;
     elapsedTime += end - start;
@@ -788,8 +758,7 @@ Result profile_convolution(Options const &options) {
   ProdCuStage prod(gridDim, tileSize, sync);
   ConsCuStage cons(gridDim, tileSize, sync);
   prod.iter = cons.iter = 0;
-  CuSyncImpl cuSyncHandle(prod, cons);
-
+  initProducerConsumer(prod, cons);
   cutlass::reference::host::TensorFill(
     tensor_y1.host_view());
   cutlass::reference::host::TensorFill(
@@ -800,10 +769,9 @@ Result profile_convolution(Options const &options) {
   
 #ifndef STREAM_K
   runConvolution(problem_size, options, &streams[0], 
-                 cuSyncHandle, tensor_x, tensor_w1, 
+                 prod, cons, tensor_x, tensor_w1, 
                  tensor_w2, tensor_y1, tensor_y2,
                  elapsedTime, conv1Time, conv2Time, 1);
-  
   if (options.reference_check) {
     // Check if output from CUTLASS kernel and reference kernel are equal or not
     tensor_y1.sync_host(); tensor_y2.sync_host();
@@ -829,12 +797,12 @@ Result profile_convolution(Options const &options) {
       std::cout << "Second Passed.\n";
     }
   }
-  runConvolution(problem_size, options, &streams[0], cuSyncHandle, tensor_x, tensor_w1, tensor_w2, tensor_y1, tensor_y2, elapsedTime, conv1Time, conv2Time, warmup);
+  runConvolution(problem_size, options, &streams[0], prod, cons, tensor_x, tensor_w1, tensor_w2, tensor_y1, tensor_y2, elapsedTime, conv1Time, conv2Time, warmup);
   elapsedTime = 0;
   conv1Time = 0;
   conv2Time = 0;
   printf("START-OVERLAP:\n");
-  runConvolution(problem_size, options, &streams[0], cuSyncHandle, tensor_x, tensor_w1, tensor_w2, tensor_y1, tensor_y2, elapsedTime, conv1Time, conv2Time, epochs);
+  runConvolution(problem_size, options, &streams[0], prod, cons, tensor_x, tensor_w1, tensor_w2, tensor_y1, tensor_y2, elapsedTime, conv1Time, conv2Time, epochs);
   printf("END-OVERLAP {Total: %lf, Conv1: %lf, Conv2: %lf} micro seconds\n", elapsedTime/epochs, conv1Time/epochs, conv2Time/epochs);
 #endif
 
@@ -885,6 +853,3 @@ int main(int argc, char const **args) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
