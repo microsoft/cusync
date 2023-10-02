@@ -26,6 +26,8 @@ enum CuStageType {
   Consumer    = 1 << 2,
 };
 
+class CuSyncTest;
+
 template<int stageType, typename Sched, typename Sync>
 struct CuStage {
   dim3 grid_;
@@ -39,6 +41,7 @@ struct CuStage {
   int iter;
   Sync syncPolicy_;
   bool canPrint;
+  friend class CuSyncTest;
 
   __device__ __host__ 
   CuStage(): iter(0) {}
@@ -58,7 +61,6 @@ struct CuStage {
   }
 
   __device__ __host__ size_t numTiles() {return grid_.x * grid_.y * grid_.z;}
-  // __host__ size_t numTiles() {return grid_.x * grid_.y *;}
 
   void buildScheduleBuffer() {
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));

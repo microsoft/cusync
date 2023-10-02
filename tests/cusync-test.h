@@ -40,7 +40,5 @@ public:
     return eq;
   }
 
-  ~CuSyncTest() {
-    // CUDA_CHECK(cudaFree(semValidArray));
-  }
+  ~CuSyncTest() {}
 };
