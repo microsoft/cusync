@@ -2,9 +2,6 @@
 
 #include "gtest/gtest.h"
 
-using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>>;
-using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
-
 typedef uint ElemType;
 
 /*
@@ -32,6 +29,7 @@ void kernel(CuSyncTest cutest, CuStage custage, int idx, ElemType* in, ElemType*
  * The kernels are synchronized using the given synchronization. Finally,
  * checks the output of both copies and the value of semaphores are equal to the expected value.
  */
+template<typename SyncPolicy, typename ProdCuStage, typename ConsCuStage>
 bool run() {
   ElemType* array1, *array2, *array3;
   size_t size = 1 << 20;
@@ -49,6 +47,9 @@ bool run() {
 
   CUDA_CHECK(cudaMemcpy(array1, hostarray, size * sizeof(ElemType), cudaMemcpyHostToDevice));
 
+  CUDA_CHECK(cudaMemset(array2, 0, size * sizeof(ElemType)));
+  CUDA_CHECK(cudaMemset(array3, 0, size * sizeof(ElemType)));
+
   cudaStream_t prod_stream, cons_stream;
   CUDA_CHECK(cudaStreamCreateWithFlags(&cons_stream, cudaStreamNonBlocking));
   CUDA_CHECK(cudaStreamCreateWithFlags(&prod_stream, cudaStreamNonBlocking));
@@ -57,7 +58,7 @@ bool run() {
   dim3 grid(size/threads.x, 1, 1);
 
   //Expected value of each semaphore is 1
-  TileSync<1> sync;
+  SyncPolicy sync;
   ProdCuStage prod(grid, threads, sync);
   ConsCuStage cons(grid, threads, sync);
   prod.iter = cons.iter = 1;
@@ -83,10 +84,11 @@ bool run() {
     eq = eq && (hostarray[i] == i);
   }
 
-  delete hostarray;
-
   //Check that value of each semaphore is equal to the expected value
   eq = eq && cutest.allSemsCorrect();
+  
+  //Cleanup
+  delete hostarray;
   CUDA_CHECK(cudaFree(array1));
   CUDA_CHECK(cudaFree(array2));
   CUDA_CHECK(cudaFree(array3));
@@ -94,6 +96,25 @@ bool run() {
   return eq;
 }
 
-TEST(SimpleTest, SimpleTest) {
-  EXPECT_TRUE(run());
+TEST(SimpleTest_TileSync, NoOpts) {
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+  bool result = run<TileSync<1>, ProdCuStage, ConsCuStage>();
+  EXPECT_TRUE(result);
+}
+
+TEST(SimpleTest_TileSync, NoAtomicAdd) {
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>, Optimizations::NoAtomicAdd>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+  
+  bool result = run<TileSync<1>, ProdCuStage, ConsCuStage>();
+  EXPECT_TRUE(result);
+}
+
+TEST(SimpleTest_TileSync, AvoidCustomOrder) {
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>, Optimizations::AvoidCustomOrder>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+  
+  bool result = run<TileSync<1>, ProdCuStage, ConsCuStage>();
+  EXPECT_TRUE(result);
 }

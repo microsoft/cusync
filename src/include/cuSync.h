@@ -23,12 +23,20 @@
 enum CuStageType {
   CuStageNone =      0,
   Producer    =      1,
-  Consumer    = 1 << 2,
+  Consumer    = 1 << 1,
 };
 
 class CuSyncTest;
 
-template<int stageType, typename Sched, typename Sync>
+enum Optimizations {
+  OptimizationNone =      0,
+  NoAtomicAdd      =      1,
+  AvoidWaitKernel  = 1 << 1,
+  AvoidCustomOrder = 1 << 2,
+  ReorderTileOrder = 1 << 3
+};
+
+template<int stageType, typename Sched, typename Sync, int Opts = OptimizationNone>
 struct CuStage {
   dim3 grid_;
   dim3 prodGrid_;
@@ -54,11 +62,17 @@ struct CuStage {
 
       if (isProducer()) {
         volatile uint* tileStatus;
-        CUDA_CHECK(cudaMalloc(&tileStatus, numTiles() * sizeof(int) * 8));
-        CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, numTiles() * sizeof(int) * 8));
+        CUDA_CHECK(cudaMalloc(&tileStatus, numTiles() * sizeof(int)));
+        CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, numTiles() * sizeof(int)));
         tileStatusWrite_ = tileStatus;
       }
   }
+
+  //Optimization Flags
+  __device__ __host__ bool getNoAtomicAdd     () {return Opts & NoAtomicAdd;     }
+  __device__ __host__ bool getAvoidWaitKernel () {return Opts & AvoidWaitKernel; }
+  __device__ __host__ bool getReorderTileOrder() {return Opts & ReorderTileOrder;}
+  __device__ __host__ bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
 
   __device__ __host__ size_t numTiles() {return grid_.x * grid_.y * grid_.z;}
 
@@ -154,14 +168,13 @@ struct CuStage {
     if (threadIdx.x == postThread && threadIdx.y == 0 && threadIdx.z == 0) {
       __threadfence_system();
       uint idx = syncPolicy_.tileIndex(tile, grid_);
-      // printf("tileStatusWrite_ %p\n", tileStatusWrite_);
-      #ifndef NO_ATOMIC_ADD
-      atomicAdd((int*)&tileStatusWrite_[idx],
-                syncPolicy_.postValue(tile, grid_));
-      #else
-      uint val = syncPolicy_.postValue(tile, grid_) * iter;
-      asm volatile ("st.global.cg.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));
-      #endif
+      if (!getNoAtomicAdd()) {
+        atomicAdd((int*)&tileStatusWrite_[idx],
+                  syncPolicy_.postValue(tile, grid_));
+      } else {
+        uint val = syncPolicy_.postValue(tile, grid_) * iter;
+        asm volatile ("st.global.cg.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));
+      }
     }
 
     __syncwarp();
@@ -182,36 +195,38 @@ struct CuStage {
 
   __forceinline__ __device__
   dim3 tile(dim3* shared_storage) {
-     #ifndef AVOID_WAIT_KERNEL
+    if (!getAvoidWaitKernel()) {
       if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && 
           blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0 && isProducer()) {
         *kernelExecuted_ = iter;
       }
-      #endif
-    #ifndef AVOID_CUSTOM_ORDER
-    if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
-      if (shared_storage != nullptr) {
-        uint linear_id = atomicAdd(tileCounter, 1);
-        if (linear_id == numTiles() - 1) {
-          *tileCounter = 0;
-        }
-        *shared_storage = tileOrder[linear_id];
-      }
-    }    
-
-    if (shared_storage != nullptr) {
-      __syncthreads();
-      return *shared_storage;
     }
-    return blockIdx;
-    #else
-    return blockIdx;
-    #endif
+    if (!getAvoidCustomOrder()) {
+      if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
+        if (shared_storage != nullptr) {
+          uint linear_id = atomicAdd(tileCounter, 1);
+          if (linear_id == numTiles() - 1) {
+            *tileCounter = 0;
+          }
+          *shared_storage = tileOrder[linear_id];
+        }
+      }    
+
+      if (shared_storage != nullptr) {
+        __syncthreads();
+        return *shared_storage;
+      }
+      return blockIdx;
+    } else {
+      return blockIdx;
+    }
   }
 
   void invokeWaitKernel(cudaStream_t stream) {
     assert(isProducer());
-    waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
+    if (!getAvoidWaitKernel()) {
+      waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
+    }
   }
 };
 
