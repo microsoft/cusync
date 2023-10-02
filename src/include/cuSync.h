@@ -1,8 +1,12 @@
 #include <assert.h>
 #include <stdio.h>
 
-#ifndef __CUSYNC__
-#define __CUSYNC__
+#include "tileorders.h"
+#include "policies.h"
+#include "device-functions.h"
+#include "wait-kernel.h"
+
+#pragma once
 
 #define HOST_FUNC __host__
 #define DEVICE_FUNC __device__
@@ -21,283 +25,11 @@ T divup(T x, T y) {
   return (x + y - 1)/y;
 }
 
-struct RowMajor {
-  //overload call operator ()
-  size_t order(dim3 grid, dim3 currTile) {
-    return currTile.x * grid.y * grid.z + currTile.y * grid.z + currTile.z;
-  }
-};
-
-// template<typename Sched, typename Sync> struct CuStage;
-//todo: make args constant
-
-struct RowSync {
-  uint waitValue_;
-  uint postValue_;
-  __device__ __host__ RowSync()  : waitValue_(0), postValue_(0) {}
-  __device__ __host__ RowSync(uint waitValue) : waitValue_(waitValue), postValue_(1) {}
-  __device__ __host__ RowSync(uint waitValue, uint postValue) : 
-    waitValue_(waitValue), postValue_(postValue) {}
-  
-  __device__ uint waitValue(const dim3& tile, const dim3& grid) {
-    return waitValue_;
-  }
-
-  __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
-    return tile.x;
-  }
-
-  __device__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y == 0;
-  }
-
-  __device__ uint postValue(const dim3& tile, const dim3& grid) {
-    return postValue_;
-  }
-};
-
-#define BatchedRows 2
-
-struct BatchedRowSync {
-  uint waitValue_;
-  uint postValue_;
-  __device__ __host__ BatchedRowSync()  : waitValue_(0), postValue_(0) {}
-  __device__ __host__ BatchedRowSync(uint waitValue) : waitValue_(waitValue), postValue_(1) {}
-  __device__ __host__ BatchedRowSync(uint waitValue, uint postValue) : 
-    waitValue_(waitValue), postValue_(postValue) {}
-  
-  __device__ bool canBatch(const dim3& tile) {
-    return true;
-  }
-  
-  __device__ uint waitValue(const dim3& tile, const dim3& grid) {
-    return waitValue_ * BatchedRows;
-  }
-
-  __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
-    return tile.x/BatchedRows;
-  }
-
-  __device__ bool isSync(const dim3& tile) {
-    return tile.y == 0;
-  }
-
-  __device__ uint postValue(const dim3& tile, const dim3& grid) {
-    return postValue_;
-  }
-};
-
-struct BatchedRowSync2 {
-  uint waitValue_;
-  uint postValue_;
-  __device__ __host__ BatchedRowSync2()  : waitValue_(0), postValue_(0) {}
-  __device__ __host__ BatchedRowSync2(uint waitValue) : waitValue_(waitValue), postValue_(1) {}
-  __device__ __host__ BatchedRowSync2(uint waitValue, uint postValue) : 
-    waitValue_(waitValue), postValue_(postValue) {}
-  
-  __device__ bool canBatch(const dim3& tile) {
-    if (tile.x >= BatchedRows)
-      return true;
-    return false;
-  }
-  
-  __device__ uint waitValue(const dim3& tile, const dim3& grid) {
-    if (canBatch(tile))
-      return waitValue_ * (grid.x - BatchedRows);
-    return waitValue_;
-  }
-
-  __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
-    if (canBatch(tile)) {
-      return BatchedRows;
-    }
-    return tile.x;
-  }
-
-  __device__ bool isSync(const dim3& tile) {
-    return tile.y == 0;
-  }
-
-  __device__ uint postValue(const dim3& tile, const dim3& grid) {
-    return postValue_;
-  }
-};
-
-struct TileFirstAndRowSync {
-  uint waitTileValue_;
-  uint postTileValue_;
-  uint waitRowValue_;
-  uint postRowValue_;
-  
-  __device__ __host__ TileFirstAndRowSync() {}
-  __device__ __host__ TileFirstAndRowSync(uint waitTileValue, uint postTileValue, 
-                                          uint waitRowValue) : 
-    waitTileValue_(waitTileValue), postTileValue_(postTileValue), waitRowValue_(waitRowValue), postRowValue_(1) {}
-  // __device__ __host__ TileFirstAndRowSync(uint waitValue, uint postValue) : 
-  //   waitValue_(waitValue), postValue_(postValue) {}
-  
-  __device__ int tileBatch(const dim3& tile) {
-    if (isTileSync(tile))
-      return 8;
-    return 1;
-  }
-
-  __device__ bool isTileSync(const dim3& tile) {
-    if (tile.x < 1) {
-      return true;
-    }
-    return false;
-  }
-
-  __device__ bool isRowSync(const dim3& tile) {
-    return !isTileSync(tile);
-  }
-
-  __device__ uint waitValue(const dim3& tile, const dim3& grid) {
-    if (isTileSync(tile)) {
-      return waitTileValue_ * tileBatch(tile);
-    }
-
-    return waitRowValue_;
-  }
-
-  __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
-    if (isTileSync(tile)) {
-      return (tile.x * 48 + tile.y)/tileBatch(tile);
-    } 
-    return 1 * 48 + tile.x;
-  }
-
-  __device__ bool isSync(const dim3& tile, const dim3& grid) {
-    if (isTileSync(tile))
-      return true;
-    else
-      return tile.y == 0;
-  }
-
-  __device__ uint postValue(const dim3& tile, const dim3& grid) {
-    if (isTileSync(tile)) {
-      return postTileValue_;
-    }
-
-    return postRowValue_;
-  }
-};
-
-template<uint batch>
-struct TileSync {
-  uint waitValue_;
-  uint postValue_;
-
-  __device__ __host__ TileSync(): waitValue_(1), postValue_(1) {}
-  __device__ __host__ TileSync(uint waitValue, uint postValue): 
-    waitValue_(waitValue), postValue_(postValue) {}
-  
-  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
-    return waitValue_ * batch;
-  }
-
-  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
-    {return postValue_;}
-
-  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-    return (tile.x * grid.y + tile.y)/batch;
-  }
-
-  __device__ __forceinline__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y < grid.y; //for self-attention
-  }
-};
-
-
-template<uint batch, uint convKernelSize>
-struct Conv2DTileSync {
-  uint waitValue_;
-  uint postValue_;
-
-  __device__ __host__ Conv2DTileSync(): waitValue_(1), postValue_(1) {}
-  __device__ __host__ Conv2DTileSync(uint waitValue, uint postValue): 
-    waitValue_(waitValue), postValue_(postValue) {}
-  
-  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
-    return waitValue_ * batch;
-  }
-
-  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
-    {return postValue_;}
-
-  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-    return tile.x * grid.y + tile.y;
-  }
-
-  __device__ __forceinline__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y % 9 == 0;
-  }
-};
-
-struct FirstTileSync {
-  uint waitValue_;
-  uint postValue_;
-
-  __device__ __host__ FirstTileSync(): waitValue_(1), postValue_(1) {}
-  __device__ __host__ FirstTileSync(uint waitValue, uint postValue): 
-    waitValue_(waitValue), postValue_(postValue) {}
-  
-  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
-    return waitValue_;
-  }
-
-  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
-    {return postValue_;}
-
-  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-    return (tile.x * grid.y + tile.y);
-  }
-
-  __device__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y == 0;
-  }
-};
-
 enum CuStageType {
   Producer = 1,
   Consumer = 1 << 2,
   LLaMAMiddle = 1 << 3,
 };
-
-__forceinline__ __device__ 
-uint semaphoreLoad(volatile uint* semaphore) {
-  uint state;
-  asm volatile ("ld.global.acquire.gpu.u32 %0, [%1];" : "=r"(state) : "l"(semaphore));
-  return state;
-}
-
-__device__ uint volatileLoad(volatile uint* addr) {
-  uint val;
-  asm volatile ("ld.global.volatile.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
-  return val;
-}
-
-__device__ __forceinline__ uint glLoad(volatile uint* addr) {
-  uint val;
-  asm volatile ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
-  return val;
-}
-
-__device__ inline uint bringToCache(volatile uint* addr) {
-  uint val;
-  asm ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
-  return val;
-}
-
-__global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
-  if (threadIdx.x == 0) {
-    uint v = glLoad(kernelExecuted);
-    while(v < expectedValue) {
-      v = volatileLoad(kernelExecuted);
-    }
-  }
-}
 
 template<int stageType, typename Sched, typename Sync>
 struct CuStage {
@@ -463,16 +195,12 @@ struct CuStage {
 
     if (shared_storage != nullptr) {
       __syncthreads();
-      dim3 i = *shared_storage;
-      // if (threadIdx.x == 2) printf("%d %d %d\n", i.x, i.y, i.z);
-      return i;
+      return *shared_storage;
     }
     return blockIdx;
     #else
     return blockIdx;
     #endif
-    // return isProducer() ? dim3{0, blockIdx.x%24, blockIdx.x/24} : 
-    //                       dim3{0, blockIdx.x%48, blockIdx.x/48};
   }
 
   void invokeWaitKernel(cudaStream_t stream) {
@@ -495,5 +223,3 @@ void initProducerConsumer(Stage1& prod, Stage2& cons) {
   CUDA_CHECK(cudaMalloc(&prod.kernelExecuted_, sizeof(int)));
   CUDA_CHECK(cudaMemset(prod.kernelExecuted_, 0, sizeof(int)));
 }
-
-#endif
