@@ -40,8 +40,10 @@ struct CuStage {
   Sync syncPolicy_;
   bool canPrint;
 
-  __device__ __host__ CuStage(): iter(0) {}
+  __device__ __host__ 
+  CuStage(): iter(0) {}
 
+  __host__
   CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
     grid_(grid), tileSize_(tileSize), iter(0), prodGrid_(0), 
     syncPolicy_(syncPolicy), canPrint(false) {
@@ -98,11 +100,13 @@ struct CuStage {
     tileStatusRead_ = tileStatus;
   }
 
- __device__ __host__ volatile uint* getTileStatusToWait() {
+ __device__ __host__
+ volatile uint* getTileStatusToWait() {
     return tileStatusRead_;
   }
 
-  __device__ void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
+  __device__
+  void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return;
     if (!syncPolicy_.isSync(tile, prodGrid_)) return;
     // if (prodGrid_.y == grid_.y) return;
@@ -122,7 +126,26 @@ struct CuStage {
       __syncthreads();
   }
 
-  __device__ void post(const dim3& tile, uint postThread = 0) {
+  __device__
+  uint waitTileIndex(dim3 tile) {
+    if (std::is_same<Sync, Conv2DTileSync<1,9>>::value) {
+      tile.y = tile.y/9;
+    }
+    return syncPolicy_.tileIndex(tile, grid_);;
+  }
+
+  __device__
+  uint waitSemValue(uint tileIndex) {
+    return globalVolatileLoad(&tileStatusRead_[tileIndex]);
+  }
+
+  __device__
+  uint expectedWaitValue(dim3 tile) {
+    return syncPolicy_.waitValue(tile, prodGrid_);
+  }
+
+  __device__
+  void post(const dim3& tile, uint postThread = 0) {
     if (!isProducer()) return;
     __syncthreads();
     // printf("407\n");
@@ -152,9 +175,11 @@ struct CuStage {
     return stageType & CuStageType::Consumer;
   }
 
-  __device__ dim3 init() {}
+  __device__
+  dim3 init() {}
 
-  __forceinline__ __device__ dim3 tile(dim3* shared_storage) {
+  __forceinline__ __device__
+  dim3 tile(dim3* shared_storage) {
      #ifndef AVOID_WAIT_KERNEL
       if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && 
           blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0 && isProducer()) {
