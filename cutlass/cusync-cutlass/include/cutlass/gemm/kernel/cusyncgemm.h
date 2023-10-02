@@ -365,14 +365,7 @@ struct CuSyncGemm {
       semaphore.wait(threadblock_tile_offset.k());
 
     }
-
-    if (params.grid_tiled_shape.k() == threadblock_tile_offset.k() + 1) {
-      if (stage.isLLaMAMiddle()) {
-        dim3 tile = {block_idx_x, block_idx_y, block_idx_z};
-        stage.wait(tile);
-      }
-    }
-
+  
     // Execute the epilogue operator to update the destination tensor.
     epilogue(output_op, iterator_D, accumulators, iterator_C); 
     

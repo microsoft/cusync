@@ -1,8 +1,16 @@
-__global__ void waitKernel(volatile uint* kernelExecuted, uint expectedValue) {
+#include "device-functions.h"
+
+#pragma once
+
+/*
+  The wait kernel waits until the value of semaphore has reached the given value.
+*/
+__global__
+void waitKernel(volatile uint* semaphore, uint givenValue) {
   if (threadIdx.x == 0) {
-    uint v = glLoad(kernelExecuted);
-    while(v < expectedValue) {
-      v = volatileLoad(kernelExecuted);
+    uint currVal = globalLoad(semaphore);
+    while(currVal < givenValue) {
+      currVal = globalVolatileLoad(semaphore);
     }
   }
 }

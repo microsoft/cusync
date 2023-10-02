@@ -8,9 +8,6 @@
 
 #pragma once
 
-#define HOST_FUNC __host__
-#define DEVICE_FUNC __device__
-
 #define CUDA_CHECK(cmd) do {                        \
   cudaError_t e = cmd;                              \
   if( e != cudaSuccess ) {                          \
@@ -20,15 +17,12 @@
   }                                                 \
 } while(0);
 
-template<typename T>
-T divup(T x, T y) {
-  return (x + y - 1)/y;
-}
+#define DIVUP(x, y) (((x) + (y) - 1)/(y));
 
 enum CuStageType {
-  Producer = 1,
-  Consumer = 1 << 2,
-  LLaMAMiddle = 1 << 3,
+  CuStageNone = 0     ,
+  Producer    = 1     ,
+  Consumer    = 1 << 2,
 };
 
 template<int stageType, typename Sched, typename Sync>
@@ -108,7 +102,7 @@ struct CuStage {
   }
 
   __device__ void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
-    if (!isConsumer() && !isLLaMAMiddle()) return;
+    if (!isConsumer()) return;
     if (!syncPolicy_.isSync(tile, prodGrid_)) return;
     // if (prodGrid_.y == grid_.y) return;
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
@@ -117,24 +111,10 @@ struct CuStage {
       }
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
       uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
-      auto v = glLoad(&tileStatusRead_[idx]);
+      auto v = globalLoad(&tileStatusRead_[idx]);
       while(v < iter * w) {
-        v = volatileLoad(&tileStatusRead_[idx]);
-      }      
-      // // asm volatile("prefetch.global.L1 [%0];" :: "l"(&tileStatusRead_[idx]));
-      // // v = glLoad(&tileStatusRead_[idx]);
-      // // 
-      // if (true) {
-      //   uint val = 0;
-      //   int* addr = (int*)&tileStatusRead_[idx];
-      //   while(val < iter * w) {
-      //     asm volatile ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr) : "memory");
-      //     if (val >= iter * w) break;
-      //   }
-      // }
-      // //   v = volatileLoad(&tileStatusRead_[idx]);
-      // //   // if (v < iter * w) break;
-      // // }
+        v = globalVolatileLoad(&tileStatusRead_[idx]);
+      }
     }
 
     if (callSync)
@@ -161,16 +141,14 @@ struct CuStage {
     __syncwarp();
   }
 
-  __device__ __host__ bool isProducer() {
+  __device__ __host__ 
+  bool isProducer() {
     return stageType & CuStageType::Producer;
   }
 
-  __device__ __host__ bool isConsumer() {
+  __device__ __host__ 
+  bool isConsumer() {
     return stageType & CuStageType::Consumer;
-  }
-
-  __device__ __host__ bool isLLaMAMiddle() {
-    return stageType & CuStageType::LLaMAMiddle;
   }
 
   __device__ dim3 init() {}

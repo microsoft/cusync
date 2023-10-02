@@ -483,7 +483,7 @@ public:
       // Loop over GEMM K dimension
       //
       uint startK = (uint)tb_offset_A.column() + (total_gemm_k_iterations - gemm_k_iterations)*Shape::kK;
-      if (custage.isConsumer() && !custage.isLLaMAMiddle() && startK > Shape::kN && startK%Shape::kN == 0) {
+      if (custage.isConsumer() && startK > Shape::kN && startK%Shape::kN == 0) {
         dim3 tile = {(uint)tb_offset_A.row()/Shape::kM, startK/Shape::kN, 0};
         #ifdef REORDER_TILE_LOADS
           custage.wait(tile, 0, false);
@@ -571,7 +571,7 @@ public:
     const uint block_idx_x, const uint block_idx_y) {
     // The last kblock is loaded in the prolog
     uint startK = tb_offset_A.column();//(total_gemm_k_iterations - gemm_k_iterations)*Shape::kK;
-    if (custage.isConsumer() && !custage.isLLaMAMiddle()) {
+    if (custage.isConsumer()) {
       // if (threadIdx.x == 0) {
       //   printf("563: %d\n", tb_offset_A.row());
       // }
