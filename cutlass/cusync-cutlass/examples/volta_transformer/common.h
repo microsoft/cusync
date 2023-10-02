@@ -58,19 +58,18 @@ static double getCurrentTime() {
 template<typename T, typename AT>
 __global__ void ref_cudamatmul(uint32_t M, uint32_t N, uint32_t K,
                                            T* A, T* B, T* C) {
-    int ROW = blockIdx.y*blockDim.y+threadIdx.y;
-    int COL = blockIdx.x*blockDim.x+threadIdx.x;
+  int ROW = blockIdx.y*blockDim.y+threadIdx.y;
+  int COL = blockIdx.x*blockDim.x+threadIdx.x;
 
-    AT tmpSum = 0;
-
-    if (ROW < M && COL < N) {
-        // each thread computes one element of the block sub-matrix
-        for (uint32_t i = 0; i < K; i++) {
-            tmpSum += ((AT)A[ROW * K + i]) * ((AT)B[i * N + COL]);
-        }
-
-        C[ROW * N + COL] = (T)tmpSum;
+  if (ROW < M && COL < N) {
+    AT tmpSum = (AT)0.0f;
+    // each thread computes one element of the block sub-matrix
+    for (uint32_t i = 0; i < K; i++) {
+        tmpSum += (AT)(A[ROW * K + i]) * (AT)(B[i * N + COL]);
     }
+
+    C[ROW * N + COL] = (T)tmpSum;
+  }
 }
 
 template<typename T, typename AT>
@@ -78,7 +77,7 @@ void ref_matmul(uint32_t M, uint32_t N, uint32_t K, T* mat1, T* mat2, T* host_re
   T* dev_refC = NULL;
   CUDA_CHECK(cudaMalloc(&dev_refC, sizeof(T)*M*N));
   dim3 block = {32, 32, 1};
-  dim3 grid = {N/block.y + 1, M/block.x + 1, 1};
+  dim3 grid = {N/block.x + 1, M/block.y + 1, 1};
   ref_cudamatmul<T,AT><<<grid, block>>>(M, N, K, mat1, mat2, dev_refC);
   CUDA_CHECK(cudaDeviceSynchronize());
   CUDA_CHECK(cudaMemcpy(host_res, dev_refC, sizeof(T)*M*N, cudaMemcpyDeviceToHost));
@@ -108,7 +107,6 @@ bool equals(size_t size, T* mat1, T* mat2, float err) {
     
     float v = err;
     bool ret = true;
-    printf("%f , %f at %lu\n", e1, e2, i);
     if (abs(e1) < v && abs(e2) < v) {
       
       ret = true;
@@ -117,11 +115,11 @@ bool equals(size_t size, T* mat1, T* mat2, float err) {
     } else if (abs(e2) < v) {
       ret = false;
     } else {
-      float err = abs(e1 - e2)/abs(e1);
+      float err = abs(abs(e1) - abs(e2))/max(abs(e1), abs(e2));
       if (err <= v) {
         ret = true;
-      // printf("243: %f , %f at %lu\n", e1, e2, i);
       } else {
+        printf("243: %f , %f at %lu, %f\n", e1, e2, i, err);
         ret = false;
       }
     }
