@@ -50,7 +50,7 @@ __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
   __shared__ int tileSh[3];
   // Get tile to compute by this thread block
   dim3 tile = custage.tile((dim3*)&tileSh[0]);
-  // if (custage.isProducer() && threadIdx.x == 0 and threadIdx.y == 0) printf("tile %d, %d\n", tile.x, tile.y);
+
   // Block index
   int bx = tile.x;
   int by = tile.y;

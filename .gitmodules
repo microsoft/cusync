@@ -1,5 +1,5 @@
 [submodule "cutlass/nvidia-cutlass"]
-	path = cutlass/nvidia-cutlass
+	path = src/include/cutlass/nvidia-cutlass
 	url = https://github.com/NVIDIA/cutlass.git
 [submodule "googletest"]
 	path = tests/googletest

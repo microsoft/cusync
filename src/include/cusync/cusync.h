@@ -22,7 +22,7 @@
 
 enum CuStageType {
   CuStageNone =      0,
-  Producer    =      1,
+  Producer    = 1 << 0,
   Consumer    = 1 << 1,
 };
 
@@ -30,7 +30,7 @@ class CuSyncTest;
 
 enum Optimizations {
   NoOptimization   =      0,
-  NoAtomicAdd      =      1,
+  NoAtomicAdd      = 1 << 0,
   AvoidWaitKernel  = 1 << 1,
   AvoidCustomOrder = 1 << 2,
   ReorderTileLoads = 1 << 3
