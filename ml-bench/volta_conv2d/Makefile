@@ -1,4 +1,4 @@
-ROOT=../../../../
+ROOT=../../
 CUSYNC=$(ROOT)/src/include
 NV_CUTLASS=$(ROOT)/cutlass/nvidia-cutlass
 CUSYNC_CUTLASS=$(ROOT)/cutlass/cusync-cutlass

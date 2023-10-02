@@ -41,8 +41,11 @@
  * Matrix multiplication (CUDA Kernel) on the device: C = A * B
  * wA is A's width and wB is B's width
  */
-template <int BLOCK_SIZE>
-__global__ void MatrixMulCUDA(CuStage<RowMajor, TileSync> custage, float *C, float *A,
+using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>>;
+using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+
+template <typename CuStageTy, int BLOCK_SIZE>
+__global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
                               float *B, int wA, int wB) {
   __shared__ int tileSh[3];
   // Get tile to compute by this thread block
@@ -198,30 +201,29 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   dim3 grid(dimsB.x / threads.x, dimsA.y / threads.y, 1);
   
   // Create CuSync and CuStage
-  TileSync sync;
+  TileSync<1> sync;
   dim3 tilesize = threads;
-  CuStage<RowMajor, TileSync> prod(grid, tilesize, sync);
-  CuStage<RowMajor, TileSync> cons(grid, tilesize, sync);
+  ProdCuStage prod(grid, tilesize, sync);
+  ConsCuStage cons(grid, tilesize, sync);
   prod.iter = cons.iter = 1;
+  initProducerConsumer(prod, cons);
 
-  CuSync<RowMajor, RowMajor, TileSync> handle(prod, cons);
-  
   // Create and start timer
   printf("Computing result using CUDA Kernel...\n");
 
   assert (block_size == 32);
   // Invoke producer kernel (C = A * B)
-  MatrixMulCUDA<32>
-        <<<grid, threads, 0, prod_stream>>>(handle.prod(), d_C, d_A, d_B, dimsA.x, dimsB.x);
+  MatrixMulCUDA<ProdCuStage, 32>
+        <<<grid, threads, 0, prod_stream>>>(prod, d_C, d_A, d_B, dimsA.x, dimsB.x);
   // CUDA_CHECK(cudaDeviceSynchronize());
 
   //Invoke wait kernel
-  handle.invokeWaitKernel(cons_stream);
+  prod.invokeWaitKernel(cons_stream);
   // //Invoke consumer kernel (E = C * D)
   // CUDA_CHECK(cudaDeviceSynchronize());
 
-  MatrixMulCUDA<32>
-        <<<grid, threads, 0, cons_stream>>>(handle.cons(), d_E, d_C, d_D, dimsA.x, dimsB.x);
+  MatrixMulCUDA<ConsCuStage, 32>
+        <<<grid, threads, 0, cons_stream>>>(cons, d_E, d_C, d_D, dimsA.x, dimsB.x);
   
   CUDA_CHECK(cudaDeviceSynchronize());
   printf("done\n");
