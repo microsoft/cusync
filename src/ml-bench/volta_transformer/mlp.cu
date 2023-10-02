@@ -49,7 +49,7 @@
 // #define AVOID_WAIT_KERNEL
 // #endif 
 
-#include<cuSync.h>
+#include<cusync/cusync.h>
 
 const uint Opts = 
 #ifdef AVOID_CUSTOM_ORDER

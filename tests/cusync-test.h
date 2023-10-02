@@ -1,6 +1,6 @@
 #include <vector>
 
-#include <cuSync.h>
+#include <cusync/cusync.h>
 
 #pragma once
 

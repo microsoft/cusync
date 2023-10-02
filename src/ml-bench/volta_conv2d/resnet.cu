@@ -13,7 +13,7 @@
   // #define REORDER_TILE_LOADS
 #endif
 
-#include <cuSync.h>
+#include <cusync/cusync.h>
 
 #include "cutlass/cutlass.h"
 #include "cutlass/gemm/device/gemm.h"

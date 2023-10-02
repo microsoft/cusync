@@ -35,7 +35,7 @@
 #include <cuda_runtime.h>
 
 // CuSync include
-#include <cuSync.h>
+#include <cusync/cusync.h>
 
 /**
  * Matrix multiplication (CUDA Kernel) on the device: C = A * B
