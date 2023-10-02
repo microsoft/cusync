@@ -50,6 +50,7 @@ __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
   __shared__ int tileSh[3];
   // Get tile to compute by this thread block
   dim3 tile = custage.tile((dim3*)&tileSh[0]);
+  // if (custage.isProducer() && threadIdx.x == 0 and threadIdx.y == 0) printf("tile %d, %d\n", tile.x, tile.y);
   // Block index
   int bx = tile.x;
   int by = tile.y;
@@ -119,7 +120,8 @@ __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
   // Write the block sub-matrix to device memory;
   // each thread writes one element
   int c = wB * BLOCK_SIZE * by + BLOCK_SIZE * bx;
-  
+  C[c + wB * ty + tx] = Csub;
+
   // Post the status of tile when computed
   custage.post(tile);
 }
@@ -215,7 +217,6 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   // Invoke producer kernel (C = A * B)
   MatrixMulCUDA<ProdCuStage, 32>
         <<<grid, threads, 0, prod_stream>>>(prod, d_C, d_A, d_B, dimsA.x, dimsB.x);
-  // CUDA_CHECK(cudaDeviceSynchronize());
 
   //Invoke wait kernel
   prod.invokeWaitKernel(cons_stream);
@@ -286,9 +287,6 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   CUDA_CHECK(cudaFree(d_E));
   CUDA_CHECK(cudaEventDestroy(start));
   CUDA_CHECK(cudaEventDestroy(stop));
-  printf(
-      "\nNOTE: The CUDA Samples are not meant for performance "
-      "measurements. Results may vary when GPU Boost is enabled.\n");
 
   if (correct) {
     return EXIT_SUCCESS;

@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <type_traits>
 
 #include "tileorders.h"
 #include "policies.h"
@@ -20,8 +21,8 @@
 #define DIVUP(x, y) (((x) + (y) - 1)/(y));
 
 enum CuStageType {
-  CuStageNone = 0     ,
-  Producer    = 1     ,
+  CuStageNone =      0,
+  Producer    =      1,
   Consumer    = 1 << 2,
 };
 
