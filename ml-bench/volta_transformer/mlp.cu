@@ -51,24 +51,39 @@
 
 #include<cuSync.h>
 
+const uint Opts = 
+#ifdef AVOID_CUSTOM_ORDER
+  Optimizations::AvoidCustomOrder |
+#endif
+#ifdef AVOID_WAIT_KERNEL
+  Optimizations::AvoidWaitKernel  |
+#endif
+#ifdef NO_ATOMIC_ADD
+  Optimizations::NoAtomicAdd      |
+#endif
+#ifdef REORDER_TILE_LOADS
+  Optimizations::ReorderTileLoads |
+#endif
+  Optimizations::NoOptimization;
+
 #ifdef ROWSYNC
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, RowSync>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, RowSync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, RowSync>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, RowSync, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, RowSync, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, RowSync, Opts>;
   using Sync = RowSync;
 #elif defined(TILEBATCH)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<2>>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, TileSync<2>>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<2>>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<2>, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, TileSync<2>, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<2>, Opts>;
   using Sync = TileSync<2>;
 #elif defined(TILESYNC)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, TileSync<1>>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, TileSync<1>, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>, Opts>;
   using Sync = TileSync<1>;
 #elif defined(BATCHEDROW)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, BatchedRowSync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, BatchedRowSync>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, BatchedRowSync, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, BatchedRowSync, Opts>;
   using Sync = BatchedRowSync;
 #else
   #error "Unknown Synchronization"
@@ -647,9 +662,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
     CUTLASS_CHECK(status);
 
     // CUDA_CHECK(cudaDeviceSynchronize());
-  #ifndef AVOID_WAIT_KERNEL
-    prod.invokeWaitKernel(consumer_stream);
-  #endif  
+    prod.invokeWaitKernel(consumer_stream);  
 
     status = gemm_op2.run(true, NULL, consumer_stream);
     CUTLASS_CHECK(status);
@@ -760,18 +773,14 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
     status = gemm_opXVW1.run(true, NULL, streams[0]);
     CUTLASS_CHECK(status);
 
-  #ifndef AVOID_WAIT_KERNEL
     prod.invokeWaitKernel(streams[1]);
-  #endif
     //glu
     cusyncgluKernel<half, GLURowTile, ((8192/3+127)/128)*128>
       <<<mlpParams.gemm_size1.m(), ShapeMMAThreadBlock::kN, 0, streams[1]>>>
       (mlpParams.gemm_size1.m(), (half*)mlpParams.xvw1.device_data(), 
        (half*)mlpParams.glu.device_data(), mid);
   
-  #ifndef AVOID_WAIT_KERNEL
     mid.invokeWaitKernel(streams[2]);
-  #endif
   
     status = gemm_opXW12.run(true, NULL, streams[2]);
     CUTLASS_CHECK(status);

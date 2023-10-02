@@ -29,14 +29,14 @@ enum CuStageType {
 class CuSyncTest;
 
 enum Optimizations {
-  OptimizationNone =      0,
+  NoOptimization   =      0,
   NoAtomicAdd      =      1,
   AvoidWaitKernel  = 1 << 1,
   AvoidCustomOrder = 1 << 2,
-  ReorderTileOrder = 1 << 3
+  ReorderTileLoads = 1 << 3
 };
 
-template<int stageType, typename Sched, typename Sync, int Opts = OptimizationNone>
+template<int stageType, typename Sched, typename Sync, int Opts = NoOptimization>
 struct CuStage {
   dim3 grid_;
   dim3 prodGrid_;
@@ -71,7 +71,7 @@ struct CuStage {
   //Optimization Flags
   __device__ __host__ bool getNoAtomicAdd     () {return Opts & NoAtomicAdd;     }
   __device__ __host__ bool getAvoidWaitKernel () {return Opts & AvoidWaitKernel; }
-  __device__ __host__ bool getReorderTileOrder() {return Opts & ReorderTileOrder;}
+  __device__ __host__ bool getReorderTileLoads() {return Opts & ReorderTileLoads;}
   __device__ __host__ bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
 
   __device__ __host__ size_t numTiles() {return grid_.x * grid_.y * grid_.z;}
