@@ -72,10 +72,12 @@ template<int stageType,             //Type of stage constructed using CuStageTyp
          typename Sync,             //Synchronization policy see policies.h
          int Opts = NoOptimization  //Optimizations for CuStage using Optimizations enum
         >
-struct CuStage {
+class CuStage {
+private:
   dim3 grid_;
   dim3 prodGrid_;
   dim3 tileSize_;
+  
   uint* tileCounter;
   dim3* tileOrder;
   volatile uint* tileStatusWrite_;
@@ -83,16 +85,18 @@ struct CuStage {
   int* kernelExecuted_;
   int iter;
   Sync syncPolicy_;
-  bool canPrint;
+
+  //CuSyncTest class can access private members of a CuStage
   friend class CuSyncTest;
 
+public:
   __device__ __host__ 
   CuStage(): iter(0) {}
 
   __host__
   CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
     grid_(grid), tileSize_(tileSize), iter(0), prodGrid_(0), 
-    syncPolicy_(syncPolicy), canPrint(false) {
+    syncPolicy_(syncPolicy) {
       buildScheduleBuffer();
 
       if (isProducer()) {
@@ -102,14 +106,6 @@ struct CuStage {
         tileStatusWrite_ = tileStatus;
       }
   }
-
-  //Optimization Flags
-  __device__ __host__ bool getNoAtomicAdd     () {return Opts & NoAtomicAdd;     }
-  __device__ __host__ bool getAvoidWaitKernel () {return Opts & AvoidWaitKernel; }
-  __device__ __host__ bool getReorderTileLoads() {return Opts & ReorderTileLoads;}
-  __device__ __host__ bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
-
-  __device__ __host__ size_t numTiles() {return grid_.x * grid_.y * grid_.z;}
 
   void buildScheduleBuffer() {
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));
@@ -128,26 +124,47 @@ struct CuStage {
                           sizeof(*tileOrder) * numTiles(),
                           cudaMemcpyHostToDevice));
     delete[] hTileOrder;
-  }
+  }  
 
-  void setTileStatusToPost(volatile uint* tileStatus) {
-    tileStatusWrite_ = tileStatus;
-  }
+  /*
+   * Getters and setters for private variables.
+   */
+  //Getters for optimizations
+  __device__ __host__
+  bool getNoAtomicAdd     () {return Opts & NoAtomicAdd;     }
+  __device__ __host__
+  bool getAvoidWaitKernel () {return Opts & AvoidWaitKernel; }
+  __device__ __host__
+  bool getReorderTileLoads() {return Opts & ReorderTileLoads;}
+  __device__ __host__
+  bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
 
-  volatile uint* getTileStatusToPost() {
-    return tileStatusWrite_;
-  }
+  //Getters for stage type
+  __device__ __host__ 
+  bool isProducer() {return stageType & CuStageType::Producer;}
+  __device__ __host__ 
+  bool isConsumer() {return stageType & CuStageType::Consumer;}
 
-  void setTileStatusToWait(volatile uint* tileStatus) {
-    tileStatusRead_ = tileStatus;
-  }
+  //Set tile status semaphore arrays
+  __host__
+  void setTileStatusToPost(volatile uint* ptr) {tileStatusWrite_ = ptr ;}
+  __host__
+  void setTileStatusToWait(volatile uint* ptr) {tileStatusRead_  = ptr ;}
 
- __device__ __host__
- volatile uint* getTileStatusToWait() {
-    return tileStatusRead_;
-  }
+  //Get tile status semaphore arrays
+  __device__ __host__
+  volatile uint* getTileStatusToPost()         {return tileStatusWrite_;}
+  __device__ __host__
+  volatile uint* getTileStatusToWait()         {return tileStatusRead_;}
 
-  __device__
+  //Set producer grid
+  __host__
+  void setProdGrid(dim3 grid) {prodGrid_ = grid;}
+  //Get total number of tiles
+  __device__ __host__
+  size_t numTiles() {return grid_.x *grid_.y*grid_.z;}
+
+  __device__ __forceinline__
   void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return;
     if (!syncPolicy_.isSync(tile, prodGrid_)) return;
@@ -168,7 +185,7 @@ struct CuStage {
       __syncthreads();
   }
 
-  __device__
+  __device__ __forceinline__
   uint waitTileIndex(dim3 tile) {
     if (std::is_same<Sync, Conv2DTileSync<1,9>>::value) {
       tile.y = tile.y/9;
@@ -176,17 +193,17 @@ struct CuStage {
     return syncPolicy_.tileIndex(tile, grid_);;
   }
 
-  __device__
+  __device__ __forceinline__
   uint waitSemValue(uint tileIndex) {
     return globalVolatileLoad(&tileStatusRead_[tileIndex]);
   }
 
-  __device__
+  __device__ __forceinline__
   uint expectedWaitValue(dim3 tile) {
     return syncPolicy_.waitValue(tile, prodGrid_);
   }
 
-  __device__
+  __device__ __forceinline__
   void post(const dim3& tile, uint postThread = 0) {
     if (!isProducer()) return;
     __syncthreads();
@@ -206,20 +223,7 @@ struct CuStage {
     __syncwarp();
   }
 
-  __device__ __host__ 
-  bool isProducer() {
-    return stageType & CuStageType::Producer;
-  }
-
-  __device__ __host__ 
-  bool isConsumer() {
-    return stageType & CuStageType::Consumer;
-  }
-
-  __device__
-  dim3 init() {}
-
-  __forceinline__ __device__
+  __device__ __forceinline__
   dim3 tile(dim3* shared_storage) {
     if (!getAvoidWaitKernel()) {
       if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && 
@@ -248,6 +252,7 @@ struct CuStage {
     }
   }
 
+  __host__
   void invokeWaitKernel(cudaStream_t stream) {
     assert(isProducer());
     if (!getAvoidWaitKernel()) {
@@ -265,7 +270,7 @@ void initProducerConsumer(Stage1& prod, Stage2& cons) {
     printf("tileStatusToPost is null\n");
     abort();
   }
-  cons.prodGrid_ = prod.grid_;
+  cons.setProdGrid(prod.grid_);
   cons.setTileStatusToWait(prod.getTileStatusToPost());
   CUDA_CHECK(cudaMalloc(&prod.kernelExecuted_, sizeof(int)));
   CUDA_CHECK(cudaMemset(prod.kernelExecuted_, 0, sizeof(int)));
