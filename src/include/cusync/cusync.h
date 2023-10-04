@@ -82,21 +82,12 @@ struct CuStage {
     CUDA_CHECK(cudaMalloc(&tileOrder, sizeof(*tileOrder) * numTiles()));
     dim3* hTileOrder = new dim3[numTiles()];
 
-    if (grid_.z > 1) {
-      for (uint z = 0; z < grid_.z; z++) {
-      for (uint x = 0; x < grid_.x; x++) {
-      for (uint y = 0; y < grid_.y; y++) {
-        size_t id = RowMajor().order(grid_, {x, y, z});
-        hTileOrder[id] = {x, y, z};
-      }}}
-    } else {
-      for (uint x = 0; x < grid_.x; x++) {
-      for (uint y = 0; y < grid_.y; y++) {
-      for (uint z = 0; z < grid_.z; z++) {
-        size_t id = RowMajor().order(grid_, {x, y, z});
-        hTileOrder[id] = {x, y, z};
-      }}}
-    }
+    for (uint z = 0; z < grid_.z; z++) {
+    for (uint x = 0; x < grid_.x; x++) {
+    for (uint y = 0; y < grid_.y; y++) {
+      size_t id = RowMajorZYX().order(grid_, {x, y, z});
+      hTileOrder[id] = {x, y, z};
+    }}}
 
     CUDA_CHECK(cudaMemcpy(tileOrder, hTileOrder, 
                           sizeof(*tileOrder) * numTiles(),
