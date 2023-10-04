@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <type_traits>
 
-#include "tileorders.h"
+#include "tile-orders.h"
 #include "policies.h"
 #include "device-functions.h"
 #include "wait-kernel.h"
@@ -20,14 +20,35 @@
 
 #define DIVUP(x, y) (((x) + (y) - 1)/(y));
 
+/*
+ * A test class to access private members of CuStage 
+ */
+class CuSyncTest;
+
+/*
+ * CuStageType enum describes if the CuStage is 
+ * a producer or a consumer or both.  
+ */
 enum CuStageType {
   CuStageNone =      0,
   Producer    = 1 << 0,
   Consumer    = 1 << 1,
 };
 
-class CuSyncTest;
-
+/*
+ * List of optimizations for a CuStage that avoids certain operations
+ * performed by a CuStage for a specific scenario.
+ * NoOptimizations : No optimization is performed
+ * NoAtomicAdd     : Use memory write instead of atomic add. Useful when each
+ *                   tile is associated with a distinct semaphore                 
+ * AvoidWaitKernel : Avoid calling wait kernel. Useful when thread blocks of all 
+ *                   CuStages can be allocated within a single wave
+ * AvoidCustomOrder: Avoid assigning tiles in the specific order but use CUDA's 
+ *                   arbitrary order. Useful when thread blocks of N dependent 
+ *                   CuStages can be allocated within (N - 1) waves 
+ * ReorderTileLoads: Reorder tile loads to overlap computation of one input's tile 
+ *                   with loading of other inputs tile
+ */
 enum Optimizations {
   NoOptimization   =      0,
   NoAtomicAdd      = 1 << 0,
@@ -36,7 +57,21 @@ enum Optimizations {
   ReorderTileLoads = 1 << 3
 };
 
-template<int stageType, typename Sched, typename Sync, int Opts = NoOptimization>
+/*
+ * A CuStage is associated with a single kernel. A CuStage contains following
+ * information about its kernel:
+ * 1. grid and tile size of the kernel
+ * 2. grid size of its producer kernel
+ * 3. synchronization policy for the kernel
+ * 
+ * Moreover, CuStage contains pointers to the tile order and array of semaphore 
+ * for tile synchronization policies. 
+ */
+template<int stageType,             //Type of stage constructed using CuStageType enum
+         typename TileOrder,        //Tile processing order see tile-orders.h 
+         typename Sync,             //Synchronization policy see policies.h
+         int Opts = NoOptimization  //Optimizations for CuStage using Optimizations enum
+        >
 struct CuStage {
   dim3 grid_;
   dim3 prodGrid_;
