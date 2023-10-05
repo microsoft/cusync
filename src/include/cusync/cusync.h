@@ -25,6 +25,15 @@ namespace cusync {
  * A test class to access private members of CuStage 
  */
 class CuSyncTest;
+class CuSync;
+
+enum CuSyncError {
+  CuSyncErrorNotProducer,
+  CuSyncErrorNotConsumer,
+  CuSyncErrorNotInitialized,
+  CuSyncErrorCUDAError,
+  CuSyncSuccess
+};
 
 /*
  * CuStageType enum describes if the CuStage is 
@@ -89,6 +98,20 @@ private:
 
   //CuSyncTest class can access private members of a CuStage
   friend class CuSyncTest;
+  
+  friend class CuSync;
+
+  //Get tile status semaphore arrays
+  __device__ __host__ __forceinline__
+  volatile uint* getTileStatusToPost()         {return tileStatusWrite_;}
+  __device__ __host__ __forceinline__
+  volatile uint* getTileStatusToWait()         {return tileStatusRead_;}
+
+  //Set tile status semaphore arrays
+  __host__ __forceinline__
+  void setTileStatusToPost(volatile uint* ptr) {tileStatusWrite_ = ptr ;}
+  __host__ __forceinline__
+  void setTileStatusToWait(volatile uint* ptr) {tileStatusRead_  = ptr ;}
 
 public:
   __device__ __host__ 
@@ -134,38 +157,28 @@ public:
    * Getters and setters for private variables.
    */
   //Getters for optimizations
-  __device__ __host__
+  __device__ __host__ __forceinline__
   bool getNoAtomicAdd     () {return Opts & NoAtomicAdd;     }
-  __device__ __host__
+  __device__ __host__ __forceinline__
   bool getAvoidWaitKernel () {return Opts & AvoidWaitKernel; }
-  __device__ __host__
+  __device__ __host__ __forceinline__
   bool getReorderTileLoads() {return Opts & ReorderTileLoads;}
-  __device__ __host__
+  __device__ __host__ __forceinline__
   bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
 
   //Getters for stage type
-  __device__ __host__ 
+  __device__ __host__ __forceinline__
   bool isProducer() {return stageType & CuStageType::Producer;}
-  __device__ __host__ 
+  __device__ __host__ __forceinline__
   bool isConsumer() {return stageType & CuStageType::Consumer;}
 
-  //Set tile status semaphore arrays
-  __host__
-  void setTileStatusToPost(volatile uint* ptr) {tileStatusWrite_ = ptr ;}
-  __host__
-  void setTileStatusToWait(volatile uint* ptr) {tileStatusRead_  = ptr ;}
-
-  //Get tile status semaphore arrays
-  __device__ __host__
-  volatile uint* getTileStatusToPost()         {return tileStatusWrite_;}
-  __device__ __host__
-  volatile uint* getTileStatusToWait()         {return tileStatusRead_;}
-
   dim3 grid() {return grid_;}
+
   //Set producer grid
   template<typename ProdCuStage>
   __host__
   void setProdGrid(ProdCuStage& prod) {prodGrid_ = prod.grid();}
+
   //Get total number of tiles
   __device__ __host__
   size_t numTiles() {return grid_.x *grid_.y*grid_.z;}
@@ -259,27 +272,31 @@ public:
   }
 
   __host__
-  void invokeWaitKernel(cudaStream_t stream) {
-    assert(isProducer());
+  CuSyncError invokeWaitKernel(cudaStream_t stream) {
+    if (!isProducer()) return CuSyncErrorNotProducer;
     if (!getAvoidWaitKernel()) {
       waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
     }
+    
+    if (cudaGetLastError() == cudaSuccess) return CuSyncErrorCUDAError;
+    return CuSyncSuccess;
   }
 
   __host__
-  void incrementIter() {iter += 1;}
+  void incrementIter() {iter += 1;}  
 };
 
-template<typename Stage1, typename Stage2>
-void initProducerConsumer(Stage1& prod, Stage2& cons) {
-  assert(prod.isProducer());
-  assert(cons.isConsumer());
+struct CuSync {
+  template<typename Stage1, typename Stage2>
+  static CuSyncError setProducerConsumerPair(Stage1& prod, Stage2& cons) {
+    if (!prod.isProducer()) return CuSyncErrorNotProducer;
+    if (!cons.isConsumer()) return CuSyncErrorNotConsumer;
+    if (prod.getTileStatusToPost() == nullptr)
+      return CuSyncErrorNotInitialized;
 
-  if (prod.getTileStatusToPost() == nullptr) {
-    printf("tileStatusToPost is null\n");
-    abort();
+    cons.setProdGrid(prod);
+    cons.setTileStatusToWait(prod.getTileStatusToPost());
+    return CuSyncSuccess;
   }
-  cons.setProdGrid(prod);
-  cons.setTileStatusToWait(prod.getTileStatusToPost());
-}
+};
 }

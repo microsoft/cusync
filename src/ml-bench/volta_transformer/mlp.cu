@@ -1009,7 +1009,7 @@ int run(int argc, char* argv[]) {
     ProdCuStage prod(gridDim1, tileSize, sync);
     ConsCuStage cons(gridDim2, tileSize, sync);
 
-    initProducerConsumer(prod, cons);
+    CuSync::setProducerConsumerPair(prod, cons);
     
     double overlapTime = 0;
     
@@ -1052,8 +1052,8 @@ int run(int argc, char* argv[]) {
     
     double overlapTime = 0;
 
-    initProducerConsumer(prod, middle);
-    initProducerConsumer(middle, cons);
+    CuSync::setProducerConsumerPair(prod, middle);
+    CuSync::setProducerConsumerPair(middle, cons);
 
     result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, middle, cons, streams, overlapTime, 1);
 

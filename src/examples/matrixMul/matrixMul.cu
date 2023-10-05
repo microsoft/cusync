@@ -211,7 +211,7 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   dim3 tilesize = threads;
   ProdCuStage prod(grid, tilesize, sync);
   ConsCuStage cons(grid, tilesize, sync);
-  initProducerConsumer(prod, cons);
+  CuSync::setProducerConsumerPair(prod, cons);
 
   // Create and start timer
   printf("Computing result using CUDA Kernel...\n");

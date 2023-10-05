@@ -63,8 +63,8 @@ bool run(int iters) {
   SyncPolicy sync;
   ProdCuStage prod(grid, threads, sync);
   ConsCuStage cons(grid, threads, sync);
-  
-  initProducerConsumer(prod, cons);
+  CuSync::setProducerConsumerPair(prod, cons);
+
   CuSyncTest cutest(1);
   
   //Invoke both kernels
