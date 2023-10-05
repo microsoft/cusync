@@ -51,6 +51,8 @@
 
 #include<cusync/cusync.h>
 
+using namespace cusync;
+
 const uint Opts = 
 #ifdef AVOID_CUSTOM_ORDER
   Optimizations::AvoidCustomOrder |
@@ -67,23 +69,23 @@ const uint Opts =
   Optimizations::NoOptimization;
 
 #ifdef ROWSYNC
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, RowSync, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, RowSync, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, RowSync, Opts>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, RowSync, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, RowSync, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, RowSync, Opts>;
   using Sync = RowSync;
 #elif defined(TILEBATCH)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<2>, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, TileSync<2>, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<2>, Opts>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync<2>, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, TileSync<2>, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync<2>, Opts>;
   using Sync = TileSync<2>;
 #elif defined(TILESYNC)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajor, TileSync<1>, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>, Opts>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync<1>, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, TileSync<1>, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync<1>, Opts>;
   using Sync = TileSync<1>;
 #elif defined(BATCHEDROW)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, BatchedRowSync, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, BatchedRowSync, Opts>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, BatchedRowSync, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, BatchedRowSync, Opts>;
   using Sync = BatchedRowSync;
 #else
   #error "Unknown Synchronization"
@@ -652,11 +654,6 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   execTime = 0;
   
   for (int r = 0; r < iters; r++) {
-    prod.iter += 1;
-    cons.iter += 1;
-    gemm_op2.params_.custage.iter += 1;
-    gemm_op1.params_.custage.iter += 1;
-    
     double start = timeInMicroSeconds();
     status = gemm_op1.run(true, NULL, producer_stream);
     CUTLASS_CHECK(status);
@@ -671,6 +668,10 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
     if (iters > 10)
       printf("{\"Total\": %lf}\n",end-start);
     execTime += end-start;
+    prod.incrementIter();
+    cons.incrementIter();
+    gemm_op2.params_.custage.incrementIter();
+    gemm_op1.params_.custage.incrementIter();
   }
 
   return cudaSuccess;
@@ -762,13 +763,6 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
   execTime = 0;
   
   for (int r = 0; r < iters; r++) {
-    prod.iter += 1;
-    cons.iter += 1;
-    mid.iter += 1;
-
-    gemm_opXW12.params_.custage.iter += 1;
-    gemm_opXVW1.params_.custage.iter += 1;
-
     double start = timeInMicroSeconds();
     status = gemm_opXVW1.run(true, NULL, streams[0]);
     CUTLASS_CHECK(status);
@@ -790,6 +784,11 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
     if (iters > 10)
       printf("{\"Total\": %lf}\n",end-start);
     execTime += end-start;
+    prod.incrementIter();
+    cons.incrementIter();
+    mid.incrementIter();
+    gemm_opXW12.params_.custage.incrementIter();
+    gemm_opXVW1.params_.custage.incrementIter();
   }
 
   return cudaSuccess;
@@ -1010,8 +1009,6 @@ int run(int argc, char* argv[]) {
     ProdCuStage prod(gridDim1, tileSize, sync);
     ConsCuStage cons(gridDim2, tileSize, sync);
 
-    prod.iter = cons.iter = 0;
-
     initProducerConsumer(prod, cons);
     
     double overlapTime = 0;
@@ -1052,8 +1049,6 @@ int run(int argc, char* argv[]) {
     dim3 gridMiddle = {(uint)DIVUP(mlpParams.gemm_size1.m(), GLURowTile), 1, 1};
     MiddleCuStage middle(gridMiddle, {GLURowTile, 1, 1}, sync);
     ConsCuStage cons(gridDim2, tileSize, sync2);
-
-    prod.iter = cons.iter = middle.iter = 0;
     
     double overlapTime = 0;
 

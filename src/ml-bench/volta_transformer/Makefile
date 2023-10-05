@@ -1,9 +1,5 @@
-NVCC=/usr/local/cuda-12.2/bin/nvcc -std=c++17
-ROOT=../../../
-CUSYNC=$(ROOT)/src/include
-NV_CUTLASS=$(ROOT)/cutlass/nvidia-cutlass
-CUSYNC_CUTLASS=$(ROOT)/cutlass/cusync-cutlass
-BUILD=build
+include ../common.mk
+
 ARCH_FLAGS=-gencode=arch=compute_70,code=[sm_70,compute_70]
 INCLUDES=-I$(NV_CUTLASS)/include -I$(NV_CUTLASS)/examples/common -I$(NV_CUTLASS)/tools/util/include -I$(CUSYNC_CUTLASS)/include/ -I$(CUSYNC) -I.
 

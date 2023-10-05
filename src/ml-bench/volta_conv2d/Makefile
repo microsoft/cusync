@@ -1,8 +1,4 @@
-ROOT=../../../
-CUSYNC=$(ROOT)/src/include
-NV_CUTLASS=$(ROOT)/cutlass/nvidia-cutlass
-CUSYNC_CUTLASS=$(ROOT)/cutlass/cusync-cutlass
-NVCC=/usr/local/cuda-12.2/bin/nvcc -std=c++17
+include ../common.mk
 
 ARCH_FLAGS=-gencode=arch=compute_70,code=[sm_70,compute_70]
 XCOMPILER=-Xcompiler=-fPIE -Xcompiler=-Wconversion -Xcompiler=-fno-strict-aliasing

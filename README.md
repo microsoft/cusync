@@ -5,6 +5,7 @@ CuSync allows synchronization of dependent tiles, i.e. thread blocks, of a chain
 Synchronizing thread blocks instead of kernels allows concurrent execution of independent thread blocks. For more details please read https://arxiv.org/abs/2305.13450.
 
 Clone the repo and its submodules using `git clone --recurse-submodules https://github.com/parasailteam/cusync.git`.
+
 If already cloned and want to clone submodules, use `git submodule update --init --recursive`.
 
 Usage
