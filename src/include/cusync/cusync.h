@@ -98,17 +98,17 @@ public:
   CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
     grid_(grid), tileSize_(tileSize), iter(1), prodGrid_(0), 
     syncPolicy_(syncPolicy) {
-      buildScheduleBuffer();
+    buildScheduleBuffer();
 
-      if (isProducer()) {
-        volatile uint* tileStatus;
-        CUDA_CHECK(cudaMalloc(&tileStatus, numTiles() * sizeof(int)));
-        CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, numTiles() * sizeof(int)));
-        tileStatusWrite_ = tileStatus;
+    if (isProducer()) {
+      volatile uint* tileStatus;
+      CUDA_CHECK(cudaMalloc(&tileStatus, numTiles() * sizeof(int)));
+      CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, numTiles() * sizeof(int)));
+      tileStatusWrite_ = tileStatus;
 
-        CUDA_CHECK(cudaMalloc(&kernelExecuted_, sizeof(int)));
-        CUDA_CHECK(cudaMemset(kernelExecuted_, 0, sizeof(int)));
-      }
+      CUDA_CHECK(cudaMalloc(&kernelExecuted_, sizeof(int)));
+      CUDA_CHECK(cudaMemset(kernelExecuted_, 0, sizeof(int)));
+    }
   }
 
   void buildScheduleBuffer() {

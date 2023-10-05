@@ -4,6 +4,7 @@
 
 #pragma once
 
+namespace cusync {
 class CuSyncTest {
 private:
   uint numStages;
@@ -21,7 +22,7 @@ public:
     if (!custage.isConsumer()) return;
     if (threadIdx.x == 0) {
       const uint index = custage.waitTileIndex(tile);
-      char eq = (char)(custage.expectedWaitValue(tile) == custage.waitSemValue(index));
+      char eq = (char)((custage.expectedWaitValue(tile)* custage.iter) == custage.waitSemValue(index));
       semValidArray[stageIdx] = (bool) eq && ((bool) semValidArray[stageIdx]);
     }
   }
@@ -42,3 +43,4 @@ public:
 
   ~CuSyncTest() {}
 };
+}

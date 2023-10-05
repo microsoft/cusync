@@ -4,6 +4,8 @@
 
 typedef uint ElemType;
 
+using namespace cusync;
+
 /*
  * This kernel copies elements of in array to out array.
  * For each thread block, the kernel post the status of tile (thread block) 
@@ -30,7 +32,7 @@ void kernel(CuSyncTest cutest, CuStage custage, int idx, ElemType* in, ElemType*
  * checks the output of both copies and the value of semaphores are equal to the expected value.
  */
 template<typename SyncPolicy, typename ProdCuStage, typename ConsCuStage>
-bool run() {
+bool run(int iters) {
   ElemType* array1, *array2, *array3;
   size_t size = 1 << 20;
 
@@ -61,16 +63,22 @@ bool run() {
   SyncPolicy sync;
   ProdCuStage prod(grid, threads, sync);
   ConsCuStage cons(grid, threads, sync);
-  prod.iter = cons.iter = 1;
+  
   initProducerConsumer(prod, cons);
   CuSyncTest cutest(1);
   
   //Invoke both kernels
-  kernel<ProdCuStage><<<grid, threads, 0, prod_stream>>>(cutest, prod, -1, array1, array2);
-  prod.invokeWaitKernel(cons_stream);
-  kernel<ConsCuStage><<<grid, threads, 0, cons_stream>>>(cutest, cons, 0, array2, array3);
+  int i = 0;
+  while (i < iters) {
+    kernel<ProdCuStage><<<grid, threads, 0, prod_stream>>>(cutest, prod, -1, array1, array2);
+    prod.invokeWaitKernel(cons_stream);
+    kernel<ConsCuStage><<<grid, threads, 0, cons_stream>>>(cutest, cons, 0, array2, array3);
 
-  CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
+    prod.incrementIter();
+    cons.incrementIter();
+    i++;
+  }
   
   //Check that copies to array2 and array3 are correct 
   CUDA_CHECK(cudaMemcpy(hostarray, array2, size * sizeof(ElemType), cudaMemcpyDeviceToHost));
@@ -97,24 +105,31 @@ bool run() {
 }
 
 TEST(SimpleTest_TileSync, NoOpts) {
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
-  bool result = run<TileSync<1>, ProdCuStage, ConsCuStage>();
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+  bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
+  EXPECT_TRUE(result);
+}
+
+TEST(SimpleTest_TileSync_MultiIters, NoOpts) {
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+  bool result = run<TileSync, ProdCuStage, ConsCuStage>(2);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, NoAtomicAdd) {
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>, Optimizations::NoAtomicAdd>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync, Optimizations::NoAtomicAdd>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
   
-  bool result = run<TileSync<1>, ProdCuStage, ConsCuStage>();
+  bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, AvoidCustomOrder) {
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>, Optimizations::AvoidCustomOrder>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync, Optimizations::AvoidCustomOrder>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
   
-  bool result = run<TileSync<1>, ProdCuStage, ConsCuStage>();
+  bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
