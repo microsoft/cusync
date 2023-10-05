@@ -44,6 +44,7 @@
 
 using namespace cusync;
 
+//Define Producer and Consuer CuStage
 using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
 using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
 
@@ -229,7 +230,12 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
         <<<grid, threads, 0, cons_stream>>>(cons, d_E, d_C, d_D, dimsA.x, dimsB.x);
   
   CUDA_CHECK(cudaDeviceSynchronize());
-  printf("done\n");
+
+  //for next run increment the iteration counter
+  prod.incrementIter();
+  cons.incrementIter();
+
+  printf("Execution done\n");
   
   // Copy result from device to host
   CUDA_CHECK(
