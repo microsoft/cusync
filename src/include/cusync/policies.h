@@ -1,5 +1,6 @@
 #pragma once
 
+namespace cusync {
 /*
  * A synchronization policy (SyncPolicy) is a struct of four functions:
  * uint waitValue(const dim3& tile, const dim3& grid) returns completed value for the tile
@@ -328,3 +329,4 @@ struct FirstTileSync {
     return tile.y == 0;
   }
 };
+}

@@ -20,6 +20,7 @@
 
 #define DIVUP(x, y) (((x) + (y) - 1)/(y));
 
+namespace cusync {
 /*
  * A test class to access private members of CuStage 
  */
@@ -91,11 +92,11 @@ private:
 
 public:
   __device__ __host__ 
-  CuStage(): iter(0) {}
+  CuStage(): iter(1) {}
 
   __host__
   CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
-    grid_(grid), tileSize_(tileSize), iter(0), prodGrid_(0), 
+    grid_(grid), tileSize_(tileSize), iter(1), prodGrid_(0), 
     syncPolicy_(syncPolicy) {
       buildScheduleBuffer();
 
@@ -104,6 +105,9 @@ public:
         CUDA_CHECK(cudaMalloc(&tileStatus, numTiles() * sizeof(int)));
         CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, numTiles() * sizeof(int)));
         tileStatusWrite_ = tileStatus;
+
+        CUDA_CHECK(cudaMalloc(&kernelExecuted_, sizeof(int)));
+        CUDA_CHECK(cudaMemset(kernelExecuted_, 0, sizeof(int)));
       }
   }
 
@@ -116,7 +120,7 @@ public:
     for (uint z = 0; z < grid_.z; z++) {
     for (uint x = 0; x < grid_.x; x++) {
     for (uint y = 0; y < grid_.y; y++) {
-      size_t id = RowMajorZYX().order(grid_, {x, y, z});
+      size_t id = RowMajorZYX()(grid_, {x, y, z});
       hTileOrder[id] = {x, y, z};
     }}}
 
@@ -157,9 +161,11 @@ public:
   __device__ __host__
   volatile uint* getTileStatusToWait()         {return tileStatusRead_;}
 
+  dim3 grid() {return grid_;}
   //Set producer grid
+  template<typename ProdCuStage>
   __host__
-  void setProdGrid(dim3 grid) {prodGrid_ = grid;}
+  void setProdGrid(ProdCuStage& prod) {prodGrid_ = prod.grid();}
   //Get total number of tiles
   __device__ __host__
   size_t numTiles() {return grid_.x *grid_.y*grid_.z;}
@@ -259,6 +265,9 @@ public:
       waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
     }
   }
+
+  __host__
+  void incrementIter() {iter += 1;}
 };
 
 template<typename Stage1, typename Stage2>
@@ -270,8 +279,7 @@ void initProducerConsumer(Stage1& prod, Stage2& cons) {
     printf("tileStatusToPost is null\n");
     abort();
   }
-  cons.setProdGrid(prod.grid_);
+  cons.setProdGrid(prod);
   cons.setTileStatusToWait(prod.getTileStatusToPost());
-  CUDA_CHECK(cudaMalloc(&prod.kernelExecuted_, sizeof(int)));
-  CUDA_CHECK(cudaMemset(prod.kernelExecuted_, 0, sizeof(int)));
+}
 }

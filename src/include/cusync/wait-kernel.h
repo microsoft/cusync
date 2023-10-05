@@ -2,6 +2,7 @@
 
 #pragma once
 
+namespace cusync {
 /*
  * The wait kernel waits until the value of semaphore has reached the given value.
  * @semaphore: Address to the unsigned integer semaphore 
@@ -15,4 +16,5 @@ void waitKernel(volatile uint* semaphore, uint givenValue) {
       currVal = globalVolatileLoad(semaphore);
     }
   }
+}
 }

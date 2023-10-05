@@ -1,5 +1,6 @@
 #pragma once
 
+namespace cusync {
 /*
  * A tile processing order is a functor that takes grid dimensions and tile index 
  * and return a linear index. A tile order is declared as:
@@ -27,3 +28,4 @@ struct RowMajorXYZ {
     return tile.x + tile.y * grid.x + tile.z * grid.x * grid.y;
   }
 };
+}

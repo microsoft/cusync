@@ -41,8 +41,11 @@
  * Matrix multiplication (CUDA Kernel) on the device: C = A * B
  * wA is A's width and wB is B's width
  */
-using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, TileSync<1>>;
-using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, TileSync<1>>;
+
+using namespace cusync;
+
+using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
+using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
 
 template <typename CuStageTy, int BLOCK_SIZE>
 __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
@@ -203,11 +206,10 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   dim3 grid(dimsB.x / threads.x, dimsA.y / threads.y, 1);
   
   // Create CuSync and CuStage
-  TileSync<1> sync;
+  TileSync sync;
   dim3 tilesize = threads;
   ProdCuStage prod(grid, tilesize, sync);
   ConsCuStage cons(grid, tilesize, sync);
-  prod.iter = cons.iter = 1;
   initProducerConsumer(prod, cons);
 
   // Create and start timer
