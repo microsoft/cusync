@@ -14,7 +14,7 @@ namespace cusync {
  * Y-dimension, and finally X-dimension.
  */
 struct RowMajorZYX {
-  size_t operator()(dim3 grid, dim3 tile) {
+  size_t operator()(const dim3& grid, const dim3& tile) {
     return tile.z + tile.y * grid.z + tile.x * grid.y * grid.z;
   }
 };
@@ -24,7 +24,7 @@ struct RowMajorZYX {
  * Y-dimension, and finally Z-dimension.
  */
 struct RowMajorXYZ {
-  size_t operator()(dim3 grid, dim3 tile) {
+  size_t operator()(const dim3& grid, const dim3& tile) {
     return tile.x + tile.y * grid.x + tile.z * grid.x * grid.y;
   }
 };

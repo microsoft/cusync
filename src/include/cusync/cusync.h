@@ -143,7 +143,7 @@ public:
     for (uint z = 0; z < grid_.z; z++) {
     for (uint x = 0; x < grid_.x; x++) {
     for (uint y = 0; y < grid_.y; y++) {
-      size_t id = RowMajorZYX()(grid_, {x, y, z});
+      size_t id = RowMajorXYZ()(grid_, {x, y, z});
       hTileOrder[id] = {x, y, z};
     }}}
 

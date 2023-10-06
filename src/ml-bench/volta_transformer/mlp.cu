@@ -73,20 +73,11 @@ const uint Opts =
   using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, RowSync, Opts>;
   using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, RowSync, Opts>;
   using Sync = RowSync;
-#elif defined(TILEBATCH)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync<2>, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, TileSync<2>, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync<2>, Opts>;
-  using Sync = TileSync<2>;
 #elif defined(TILESYNC)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync<1>, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, TileSync<1>, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync<1>, Opts>;
-  using Sync = TileSync<1>;
-#elif defined(BATCHEDROW)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, BatchedRowSync, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, BatchedRowSync, Opts>;
-  using Sync = BatchedRowSync;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, TileSync, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync, Opts>;
+  using Sync = TileSync;
 #else
   #error "Unknown Synchronization"
 #endif
@@ -135,7 +126,7 @@ using SmArch = cutlass::arch::Sm70;
     using EpilogueOp1 = cutlass::epilogue::thread::LinearCombinationGELU<
   #endif
 #else
-  //For correction no need to appy any epilogue
+  //For correctness check no need to appy any epilogue
   using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
 #endif
     ElementOutput,                                        
@@ -986,7 +977,7 @@ int run(int argc, char* argv[]) {
   using Sync = TileSync<2>;
   Sync sync;
 #elif defined(TILESYNC)
-  using Sync = TileSync<1>;
+  using Sync = TileSync;
   Sync sync;
 #elif defined(BATCHEDROW)
   using Sync = BatchedRowSync;
@@ -1038,7 +1029,7 @@ int run(int argc, char* argv[]) {
 #if defined(ROWSYNC)
   RowSync sync2(min(ShapeMMAThreadBlock::kM, mlpParams.gemm_size1.m()), GLURowTile);
 #elif defined(TILESYNC)
-  using Sync = TileSync<1>;
+  using Sync = TileSync;
   uint waitValue = DIVUP(min(mlpParams.gemm_size1.m(), ShapeMMAThreadBlock::kM), GLURowTile);
   Sync sync2(waitValue, 1);
 #else
