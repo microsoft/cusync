@@ -9,7 +9,7 @@
 __device__ __forceinline__
 uint globalVolatileLoad(volatile uint* addr) {
   uint val;
-  asm volatile ("ld.global.volatile.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
+  asm volatile ("ld.global.acquire.gpu.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
   return val;
 }
 

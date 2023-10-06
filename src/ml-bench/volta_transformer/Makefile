@@ -20,6 +20,9 @@ $(BUILD)/mlp-tilebatchsync: mlp.cu common.h
 $(BUILD)/mlp-gpt3-rowsync: mlp.cu common.h
 	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG ./mlp.cu -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3 -DROWSYNC -DMLP_GPT3
 
+$(BUILD)/mlp-gpt3-tilesync: mlp.cu common.h
+	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG ./mlp.cu -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3 -DTILESYNC -DMLP_GPT3
+
 $(BUILD)/mlp-llama-rowsync: mlp.cu common.h
 	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG ./mlp.cu -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3 -DROWSYNC -DMLP_LLAMA
 

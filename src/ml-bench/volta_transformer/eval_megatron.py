@@ -653,7 +653,7 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
-for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]: #
+for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]:
   if False:
     if attention_or_mlp == "attention":
       (s, o) = subprocess.getstatusoutput(f"python3 torch-baselines/torchAttention.py {m} {int(H/8)} {H} {H}")
