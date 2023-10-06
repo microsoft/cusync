@@ -52,6 +52,7 @@
 #include "cutlass/conv/device/implicit_gemm_convolution.h"
 #include "cutlass/conv/kernel/cusyncdefault_conv2d_fprop.h"
 #include "cutlass/conv/device/cusyncimplicit_gemm_convolution.h"
+#include "cutlass/gemm/threadblock/cusync_threadblock_swizzle.h"
 #include "cutlass/conv/conv2d_problem_size.h"
 #include "cutlass/conv/convolution.h"
 
@@ -95,6 +96,8 @@ static double getCurrentTime() {
   return timeInMicroSeconds();
 }
 
+using namespace cusync;
+
 using ElementAccumulator = float;
 using ElementComputeEpilogue = cutlass::half_t;
 using ElementInputA = cutlass::half_t;
@@ -115,23 +118,19 @@ using WarpShape = cutlass::gemm::GemmShape<32, 32, 32>;
 
 #ifdef ROWSYNC 
   using Sync = RowSync;
-  using FirstStage = CuStage<CuStageType::Producer, RowMajor, RowSync>;
-  using Mid1Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajor, RowSync>;
-  using Mid2Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajor, RowSync>;
-  using FinalStage = CuStage<CuStageType::Consumer, RowMajor, RowSync>;
+  using FirstStage = CuStage<CuStageType::Producer, RowMajorZYX, RowSync>;
+  using Mid1Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajorZYX, RowSync>;
+  using Mid2Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajorZYX, RowSync>;
+  using FinalStage = CuStage<CuStageType::Consumer, RowMajorZYX, RowSync>;
 #elif defined(TILESYNC)
-  using Sync = Conv2DTileSync<1, 3*3>;
-  using FirstStage = CuStage<CuStageType::Producer, RowMajor, Sync>;
-  using Mid1Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajor, Sync>;
-  using Mid2Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajor, Sync>;
-  using FinalStage = CuStage<CuStageType::Consumer, RowMajor, Sync>;
+  using Sync = Conv2DTileSync<3, 3>;
+  using FirstStage = CuStage<CuStageType::Producer, RowMajorZYX, Sync>;
+  using Mid1Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajorZYX, Sync>;
+  using Mid2Stage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajorZYX, Sync>;
+  using FinalStage = CuStage<CuStageType::Consumer, RowMajorZYX, Sync>;
 #else
   #error "Unknown Synchronization"
 #endif 
-
-using CuSyncImpl1 = CuSync<FirstStage, Mid1Stage>;
-using CuSyncImpl2 = CuSync<Mid1Stage, Mid2Stage>;
-using CuSyncImpl3 = CuSync<Mid2Stage, FinalStage>;
 
 using InstructionShape = cutlass::gemm::GemmShape<8, 8, 4>;
 
@@ -167,7 +166,7 @@ using Conv2dFpropKernel =
 
 using BaselineImplicitGemm = device::ImplicitGemmConvolution<Conv2dFpropKernel>;
 
-using CuSyncSwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;
+using CuSyncSwizzleThreadBlock = cutlass::gemm::threadblock::CuSyncGemmIdentityThreadblockSwizzle<>;
 
 using FirstConv2dKernel =
   typename kernel::CuSyncDefaultConv2dFprop<FirstStage,
@@ -702,16 +701,6 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
   CUTLASS_CHECK(status);
 
   for (int i = 0; i < runs; i++) {
-    stage1.iter += 1;
-    stage2.iter += 1;
-    stage3.iter += 1;
-    stage4.iter += 1;
-    
-    implicit_gemm_op1.params_.custage.iter += 1;
-    implicit_gemm_op2.params_.custage.iter += 1;
-    implicit_gemm_op3.params_.custage.iter += 1;
-    implicit_gemm_op4.params_.custage.iter += 1;
-    
     double start = getCurrentTime();
     auto status = implicit_gemm_op1(streams[0]);
   //  waitKernel<<<1,1,0,streams[1]>>>((uint*)&kernelExecuted[0], args1.overlap_handle.iter);
@@ -741,6 +730,15 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
     // conv2Time += end - middle1;
     elapsedTime += end - start;
     printf("{\"Total\": %lf, \"conv1\": %lf, \"conv2\": %lf}\n",end-start,conv1Time,conv2Time);
+    stage1.incrementIter();
+    stage2.incrementIter();
+    stage3.incrementIter();
+    stage4.incrementIter();
+    
+    implicit_gemm_op1.params_.custage.incrementIter();
+    implicit_gemm_op2.params_.custage.incrementIter();
+    implicit_gemm_op3.params_.custage.incrementIter();
+    implicit_gemm_op4.params_.custage.incrementIter();
   }
 }
 
@@ -945,11 +943,10 @@ Result profile_convolution(Options const &options) {
   Mid1Stage mid1(gridDim, tileSize, sync);
   Mid2Stage mid2(gridDim, tileSize, sync);
   FinalStage cons(gridDim, tileSize, sync);
-  prod.iter = mid1.iter = mid2.iter = cons.iter = 0;
 
-  initProducerConsumer(prod, mid1);
-  initProducerConsumer(mid1, mid2);
-  initProducerConsumer(mid2, cons);
+  CuSync::setProducerConsumerPair(prod, mid1);
+  CuSync::setProducerConsumerPair(mid1, mid2);
+  CuSync::setProducerConsumerPair(mid2, cons);
 
   cutlass::reference::host::TensorFill(
     tensor_y1.host_view());

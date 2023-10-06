@@ -65,6 +65,8 @@ static double getCurrentTime() {
   return timeInMicroSeconds();
 }
 
+using namespace cusync;
+
 using ElementAccumulator = float;
 using ElementComputeEpilogue = cutlass::half_t;
 using ElementInputA = cutlass::half_t;
@@ -85,12 +87,12 @@ using WarpShape = cutlass::gemm::GemmShape<32, 32, 32>;
 
 #ifdef ROWSYNC 
   using Sync = RowSync;
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, RowSync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, RowSync>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, RowSync>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, RowSync>;
 #elif defined(TILESYNC)
-  using Sync = Conv2DTileSync<1, 3*3>;
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajor, Sync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajor, Sync>;
+  using Sync = Conv2DTileSync<3,3>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, Sync>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, Sync>;
 #else
   #error "Unknown Synchronization"
 #endif
@@ -541,10 +543,6 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
   CUTLASS_CHECK(status);
 
   for (int i = 0; i < runs; i++) {
-    cons.iter += 1;
-    prod.iter += 1;
-    implicit_gemm_op1.params_.custage.iter += 1;
-    implicit_gemm_op2.params_.custage.iter += 1;
     double start = getCurrentTime();
     auto status = implicit_gemm_op1(streams[0]);
   //  waitKernel<<<1,1,0,streams[1]>>>((uint*)&kernelExecuted[0], args1.overlap_handle.iter);
@@ -565,6 +563,10 @@ void runConvolution(cutlass::conv::Conv2dProblemSize problem_size,
     // conv2Time += end - middle1;
     elapsedTime += end - start;
     printf("{\"Total\": %lf, \"conv1\": %lf, \"conv2\": %lf}\n",end-start,conv1Time,conv2Time);
+    cons.incrementIter();
+    prod.incrementIter();
+    implicit_gemm_op1.params_.custage.incrementIter();
+    implicit_gemm_op2.params_.custage.incrementIter();
   }
 }
 
@@ -757,8 +759,8 @@ Result profile_convolution(Options const &options) {
 
   ProdCuStage prod(gridDim, tileSize, sync);
   ConsCuStage cons(gridDim, tileSize, sync);
-  prod.iter = cons.iter = 0;
-  initProducerConsumer(prod, cons);
+  
+  CuSync::setProducerConsumerPair(prod, cons);
   cutlass::reference::host::TensorFill(
     tensor_y1.host_view());
   cutlass::reference::host::TensorFill(

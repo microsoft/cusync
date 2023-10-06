@@ -69,14 +69,14 @@ const uint Opts =
   Optimizations::NoOptimization;
 
 #ifdef ROWSYNC
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, RowSync, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, RowSync, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, RowSync, Opts>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, RowSync, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorZYX, RowSync, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, RowSync, Opts>;
   using Sync = RowSync;
 #elif defined(TILESYNC)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorXYZ, TileSync, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync, Opts>;
+  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, TileSync, Opts>;
+  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorZYX, TileSync, Opts>;
+  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, TileSync, Opts>;
   using Sync = TileSync;
 #else
   #error "Unknown Synchronization"
@@ -123,7 +123,7 @@ using SmArch = cutlass::arch::Sm70;
     using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
   #elif defined(MLP_GPT3)
     //First GeMM in MLP is fused with GELU
-    using EpilogueOp1 = cutlass::epilogue::thread::LinearCombinationGELU<
+    using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
   #endif
 #else
   //For correctness check no need to appy any epilogue

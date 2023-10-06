@@ -189,7 +189,7 @@ public:
     if (!syncPolicy_.isSync(tile, prodGrid_)) return;
     // if (prodGrid_.y == grid_.y) return;
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
-      if (std::is_same<Sync, Conv2DTileSync<1,9>>::value) {
+      if (std::is_same<Sync, Conv2DTileSync<3,3>>::value) {
         tile.y = tile.y/9;
       }
       uint w = syncPolicy_.waitValue(tile, prodGrid_);
@@ -206,7 +206,7 @@ public:
 
   __device__ __forceinline__
   uint waitTileIndex(dim3 tile) {
-    if (std::is_same<Sync, Conv2DTileSync<1,9>>::value) {
+    if (std::is_same<Sync, Conv2DTileSync<3,3>>::value) {
       tile.y = tile.y/9;
     }
     return syncPolicy_.tileIndex(tile, grid_);;
