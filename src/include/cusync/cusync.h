@@ -153,7 +153,7 @@ public:
     grid_(grid), 
     prodGrid_(0), //set by CuSync::set* methods 
     tileSize_(tileSize),
-    iter(1), //Set first value of iteration to 1 
+    iter(1),     //run counter starts from 1 
     syncPolicy_(syncPolicy) {
     
     buildScheduleBuffer();
