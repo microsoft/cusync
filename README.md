@@ -41,7 +41,7 @@ TileSync sync;
 dim3 tilesize = threads;
 ProdCuStage prod(grid, tilesize, sync);
 ConsCuStage cons(grid, tilesize, sync);
-initProducerConsumer(prod, cons);
+CuSync::setProducerConsumer(prod, cons);
 ```
 
 ### Invoking kernels
