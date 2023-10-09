@@ -72,7 +72,7 @@ using ShapeMMAWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
   fileContents = fileContents[0:tilesCodeStart] + "\n" + tilesCode + "\n" + fileContents[tilesCodeEnd:]
   with open(outFile, "w") as f:
     f.write(fileContents)
-  (s,o) = subprocess.getstatusoutput("rm streamk-eval ; make streamk-eval")
+  (s,o) = subprocess.getstatusoutput(f"rm -r {buildDir('streamk-eval')} ; make {buildDir('streamk-eval')}")
   if s != 0:
     print(o)
     sys.exit(0)
@@ -667,7 +667,8 @@ for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]:
       cublasTimes[m] = ctime
 
     print(f'{m} & {H} & {"pytorch"} & {"%.2f"%float(ctime)}')
-
+  
+  if True:
     genAndMakeStreamK(tiles[m])
     if model == 'gpt3' or (model == 'llama' and attention_or_mlp == 'attention'):
       streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
@@ -710,7 +711,8 @@ for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]:
       thirdGeMMStreamK = getStreamKTimes(o)
       total = firstGeMMStreamK + secondGeMMStreamK + thirdGeMMStreamK
       print(f'{m} & {H} & {"streamk"} & {"%.2f"%(firstGeMMStreamK*1000)} & {"%.2f"%(secondGeMMStreamK*1000)} & {"%.2f"%(thirdGeMMStreamK*1000)} & {"%.2f"%(total*1000)}')
-  
+    continue
+
   baselineDone = False
   bTimeTotal = 0
   policies = ['rowsync', 'tilesync','stridedsync']

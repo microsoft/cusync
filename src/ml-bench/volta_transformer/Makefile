@@ -8,8 +8,8 @@ DEFINES=-DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass -DCUTLASS_ENABLE_T
 $(BUILD)/streamk: streamk.cu
 	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG ./streamk.cu -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3
 
-$(BUILD)/streamk-eval: streamk-eval.cu
-	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG ./streamk-eval.cu -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3
+$(BUILD)/streamk-eval: $(BUILD)/streamk-eval.cu
+	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG $(BUILD)/streamk-eval.cu -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3
 
 $(BUILD)/mlp-batchedrow: mlp.cu common.h
 	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG ./mlp.cu -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3 -DBATCHEDROW
