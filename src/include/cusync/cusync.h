@@ -84,17 +84,28 @@ template<int stageType,             //Type of stage constructed using CuStageTyp
         >
 class CuStage {
 private:
+  //grid size of this stage
   dim3 grid_;
+  //grid size of the producer stage
   dim3 prodGrid_;
+  //tile size of this stage
   dim3 tileSize_;
   
-  uint* tileCounter;
+  //Number of runs of stage kernel
+  int iter;
+  //Sync policy of stage
+  Sync syncPolicy_;
+
+  //GPU pointer to array of order of tiles
   dim3* tileOrder;
+  //GPU pointer to counter of tile for index in tile order
+  uint* tileCounter;
+
+  //GPU pointer to wait kernel semaphore
+  int* kernelExecuted_;
+  
   volatile uint* tileStatusWrite_;
   volatile uint* tileStatusRead_;
-  int* kernelExecuted_;
-  int iter;
-  Sync syncPolicy_;
 
   //CuSyncTest class can access private members of a CuStage
   friend class CuSyncTest;
