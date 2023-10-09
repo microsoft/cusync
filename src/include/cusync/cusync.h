@@ -91,7 +91,7 @@ private:
   //tile size of this stage
   dim3 tileSize_;
   
-  //Number of runs of stage kernel
+  //Number of runs of stage kernel started
   int iter;
   //Sync policy of stage
   Sync syncPolicy_;
@@ -107,9 +107,8 @@ private:
   volatile uint* tileStatusWrite_;
   volatile uint* tileStatusRead_;
 
-  //CuSyncTest class can access private members of a CuStage
+  //CuSyncTest and CuSync can access private members
   friend class CuSyncTest;
-  
   friend class CuSync;
 
   //Get tile status semaphore arrays
@@ -124,32 +123,14 @@ private:
   __host__ __forceinline__
   void setTileStatusToWait(volatile uint* ptr) {tileStatusRead_  = ptr ;}
 
-public:
-  __device__ __host__ 
-  CuStage(): iter(1) {}
-
-  __host__
-  CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
-    grid_(grid), tileSize_(tileSize), iter(1), prodGrid_(0), 
-    syncPolicy_(syncPolicy) {
-    buildScheduleBuffer();
-
-    if (isProducer()) {
-      volatile uint* tileStatus;
-      CUDA_CHECK(cudaMalloc(&tileStatus, numTiles() * sizeof(int)));
-      CUDA_CHECK(cudaMemset((uint*)tileStatus, 0, numTiles() * sizeof(int)));
-      tileStatusWrite_ = tileStatus;
-
-      CUDA_CHECK(cudaMalloc(&kernelExecuted_, sizeof(int)));
-      CUDA_CHECK(cudaMemset(kernelExecuted_, 0, sizeof(int)));
-    }
-  }
-
+  //Call TileOrder parameter to generate tile order and store 
+  //it in tileOrder
   void buildScheduleBuffer() {
+    dim3* hTileOrder = new dim3[numTiles()];
+
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));
     CUDA_CHECK(cudaMemset(tileCounter, 0, sizeof(int)));
     CUDA_CHECK(cudaMalloc(&tileOrder, sizeof(*tileOrder) * numTiles()));
-    dim3* hTileOrder = new dim3[numTiles()];
 
     for (uint z = 0; z < grid_.z; z++) {
     for (uint x = 0; x < grid_.x; x++) {
@@ -162,7 +143,34 @@ public:
                           sizeof(*tileOrder) * numTiles(),
                           cudaMemcpyHostToDevice));
     delete[] hTileOrder;
-  }  
+  }
+public:
+  __device__ __host__ 
+  CuStage(): iter(1) {}
+
+  __host__
+  CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
+    grid_(grid), 
+    prodGrid_(0), //set by CuSync::set* methods 
+    tileSize_(tileSize),
+    iter(1), //Set first value of iteration to 1 
+    syncPolicy_(syncPolicy) {
+    
+    buildScheduleBuffer();
+
+    if (isProducer()) {
+      //Allocate tile status semaphore array for all tiles
+      //CuSync::set* methods set this array to consumer stages
+      CUDA_CHECK(cudaMalloc(&tileStatusWrite_, numTiles() * sizeof(int)));
+      CUDA_CHECK(cudaMemset((uint*)tileStatusWrite_, 0, numTiles() * sizeof(int)));
+
+      //Allocate wait kernel semaphore
+      if (!getAvoidWaitKernel()) {
+        CUDA_CHECK(cudaMalloc(&kernelExecuted_, sizeof(int)));
+        CUDA_CHECK(cudaMemset(kernelExecuted_, 0, sizeof(int)));
+      }
+    }
+  } 
 
   /*
    * Getters and setters for private variables.
@@ -183,6 +191,7 @@ public:
   __device__ __host__ __forceinline__
   bool isConsumer() {return stageType & CuStageType::Consumer;}
 
+  //Return grid size of this stage
   dim3 grid() {return grid_;}
 
   //Set producer grid
