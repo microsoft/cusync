@@ -69,14 +69,14 @@ const uint Opts =
   Optimizations::NoOptimization;
 
 #ifdef ROWSYNC
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, RowSync, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorZYX, RowSync, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, RowSync, Opts>;
+  using ProdCuStage   = CuStage<RowMajorZYX, NoSync,  RowSync, Opts>;
+  using MiddleCuStage = CuStage<RowMajorZYX, RowSync, RowSync, Opts>;
+  using ConsCuStage   = CuStage<RowMajorZYX, RowSync, NoSync,  Opts>;
   using Sync = RowSync;
 #elif defined(TILESYNC)
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, TileSync, Opts>;
-  using MiddleCuStage = CuStage<CuStageType::Producer | CuStageType::Consumer, RowMajorZYX, TileSync, Opts>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, TileSync, Opts>;
+  using ProdCuStage   = CuStage<RowMajorZYX, NoSync,   TileSync, Opts>;
+  using MiddleCuStage = CuStage<RowMajorZYX, TileSync, TileSync, Opts>;
+  using ConsCuStage   = CuStage<RowMajorZYX, TileSync, NoSync,   Opts>;
   using Sync = TileSync;
 #else
   #error "Unknown Synchronization"
@@ -997,8 +997,8 @@ int run(int argc, char* argv[]) {
   
   //Run cusync mlp
   if (mlpParams.isGPT3()) {
-    ProdCuStage prod(gridDim1, tileSize, sync);
-    ConsCuStage cons(gridDim2, tileSize, sync);
+    ProdCuStage prod(gridDim1, tileSize, NoSync(), sync);
+    ConsCuStage cons(gridDim2, tileSize, sync, NoSync());
 
     CuSync::setProducerConsumerPair(prod, cons);
     
@@ -1036,10 +1036,10 @@ int run(int argc, char* argv[]) {
   #error "Unknown Policy"
 #endif
 
-    ProdCuStage prod(gridDim1, tileSize, sync);
+    ProdCuStage prod(gridDim1, tileSize, NoSync(), sync);
     dim3 gridMiddle = {(uint)DIVUP(mlpParams.gemm_size1.m(), GLURowTile), 1, 1};
-    MiddleCuStage middle(gridMiddle, {GLURowTile, 1, 1}, sync);
-    ConsCuStage cons(gridDim2, tileSize, sync2);
+    MiddleCuStage middle(gridMiddle, {GLURowTile, 1, 1}, sync, sync);
+    ConsCuStage cons(gridDim2, tileSize, sync2, NoSync());
     
     double overlapTime = 0;
 

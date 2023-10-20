@@ -668,7 +668,7 @@ for m in [1,2,4,8,16,32,64,128,256,512,1024,2048]:
 
     print(f'{m} & {H} & {"pytorch"} & {"%.2f"%float(ctime)}')
   
-  if True:
+  if False:
     genAndMakeStreamK(tiles[m])
     if model == 'gpt3' or (model == 'llama' and attention_or_mlp == 'attention'):
       streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
