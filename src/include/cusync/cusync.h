@@ -36,16 +36,6 @@ enum CuSyncError {
 };
 
 /*
- * CuStageType enum describes if the CuStage is 
- * a producer or a consumer or both.  
- */
-enum CuStageType {
-  CuStageNone =      0,
-  Producer    = 1 << 0,
-  Consumer    = 1 << 1,
-};
-
-/*
  * List of optimizations for a CuStage that avoids certain operations
  * performed by a CuStage for a specific scenario.
  * NoOptimizations : No optimization is performed
@@ -77,9 +67,9 @@ enum Optimizations {
  * Moreover, CuStage contains pointers to the tile order and array of semaphore 
  * for tile synchronization policies. 
  */
-template<int stageType,             //Type of stage constructed using CuStageType enum
-         typename TileOrder,        //Tile processing order see tile-orders.h 
-         typename Sync,             //Synchronization policy see policies.h
+template<typename TileOrder,        //Tile processing order (see tile-orders.h) 
+         typename InputSyncPolicy,  //Policy for synchronizing on the input (see policies.h)
+         typename OutputSyncPolicy, //Policy for synchronizing on the output (see policies.h)
          int Opts = NoOptimization  //Optimizations for CuStage using Optimizations enum
         >
 class CuStage {
@@ -91,10 +81,12 @@ private:
   //tile size of this stage
   dim3 tileSize_;
   
-  //Number of runs of stage kernel started
+  //Number of runs of stage kernels invoked
   int iter;
-  //Sync policy of stage
-  Sync syncPolicy_;
+  //Producer Sync policy of the stage
+  InputSyncPolicy inputPolicy_;
+  //Consumer Sync policy of the stage
+  OutputSyncPolicy outputPolicy_;
 
   //GPU pointer to array of order of tiles
   dim3* tileOrder;
@@ -149,12 +141,13 @@ public:
   CuStage(): iter(1) {}
 
   __host__
-  CuStage(dim3 grid, dim3 tileSize, Sync syncPolicy) : 
+  CuStage(dim3 grid, dim3 tileSize, InputSyncPolicy inputPolicy, OutputSyncPolicy outputPolicy) : 
     grid_(grid), 
     prodGrid_(0), //set by CuSync::set* methods 
     tileSize_(tileSize),
     iter(1),     //run counter starts from 1 
-    syncPolicy_(syncPolicy) {
+    inputPolicy_(inputPolicy),
+    outputPolicy_(outputPolicy) {
     
     buildScheduleBuffer();
 
@@ -185,11 +178,13 @@ public:
   __device__ __host__ __forceinline__
   bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
 
-  //Getters for stage type
+  //A producer does have a policy for its output 
   __device__ __host__ __forceinline__
-  bool isProducer() {return stageType & CuStageType::Producer;}
+  bool isProducer() {return !std::is_same<OutputSyncPolicy, NoSync>::value;}
+
+  //A consumer does have a policy for its input 
   __device__ __host__ __forceinline__
-  bool isConsumer() {return stageType & CuStageType::Consumer;}
+  bool isConsumer() {return !std::is_same<InputSyncPolicy, NoSync>::value;}
 
   //Return grid size of this stage
   dim3 grid() {return grid_;}
@@ -206,14 +201,14 @@ public:
   __device__ __forceinline__
   void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return;
-    if (!syncPolicy_.isSync(tile, prodGrid_)) return;
+    if (!inputPolicy_.isSync(tile, prodGrid_)) return;
     // if (prodGrid_.y == grid_.y) return;
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
-      if (std::is_same<Sync, Conv2DTileSync<3,3>>::value) {
+      if (std::is_same<InputSyncPolicy, Conv2DTileSync<3,3>>::value) {
         tile.y = tile.y/9;
       }
-      uint w = syncPolicy_.waitValue(tile, prodGrid_);
-      uint idx = syncPolicy_.tileIndex(tile, prodGrid_);
+      uint w = inputPolicy_.waitValue(tile, prodGrid_);
+      uint idx = inputPolicy_.tileIndex(tile, prodGrid_);
       auto v = globalLoad(&tileStatusRead_[idx]);
       while(v < iter * w) {
         v = globalVolatileLoad(&tileStatusRead_[idx]);
@@ -226,10 +221,10 @@ public:
 
   __device__ __forceinline__
   uint waitTileIndex(dim3 tile) {
-    if (std::is_same<Sync, Conv2DTileSync<3,3>>::value) {
+    if (std::is_same<InputSyncPolicy, Conv2DTileSync<3,3>>::value) {
       tile.y = tile.y/9;
     }
-    return syncPolicy_.tileIndex(tile, grid_);;
+    return inputPolicy_.tileIndex(tile, grid_);;
   }
 
   __device__ __forceinline__
@@ -239,7 +234,7 @@ public:
 
   __device__ __forceinline__
   uint expectedWaitValue(dim3 tile) {
-    return syncPolicy_.waitValue(tile, prodGrid_);
+    return inputPolicy_.waitValue(tile, prodGrid_);
   }
 
   __device__ __forceinline__
@@ -249,12 +244,12 @@ public:
     // printf("407\n");
     if (threadIdx.x == postThread && threadIdx.y == 0 && threadIdx.z == 0) {
       __threadfence_system();
-      uint idx = syncPolicy_.tileIndex(tile, grid_);
+      uint idx = outputPolicy_.tileIndex(tile, grid_);
       if (!getNoAtomicAdd()) {
         atomicAdd((int*)&tileStatusWrite_[idx],
-                  syncPolicy_.postValue(tile, grid_));
+                  outputPolicy_.postValue(tile, grid_));
       } else {
-        uint val = syncPolicy_.postValue(tile, grid_) * iter;
+        uint val = outputPolicy_.postValue(tile, grid_) * iter;
         asm volatile ("st.global.cg.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));
       }
     }

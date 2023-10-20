@@ -10,6 +10,23 @@ namespace cusync {
  */
 
 /*
+ * No Synchronization 
+ */
+struct NoSync {
+  __device__ __host__
+  NoSync() {}
+
+  __device__ 
+  uint waitValue(const dim3& tile, const dim3& grid) {return 0;}
+  __device__
+  uint tileIndex(const dim3& tile, const dim3& grid) {return 0;}
+  __device__ 
+  bool isSync   (const dim3& tile, const dim3& grid) {return false;}
+  __device__
+  uint postValue(const dim3& tile, const dim3& grid) {return 0;}
+};
+
+/*
  * RowSync policy assigns same semaphore for tiles sharing the same row (x index of tile)
  */
 struct RowSync {

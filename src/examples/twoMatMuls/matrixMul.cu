@@ -45,8 +45,8 @@
 using namespace cusync;
 
 //Define Producer and Consuer CuStage
-using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
-using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync>;
+using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
 
 template <typename CuStageTy, int BLOCK_SIZE>
 __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
@@ -209,8 +209,8 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   // Create CuSync and CuStage
   TileSync sync;
   dim3 tilesize = threads;
-  ProdCuStage prod(grid, tilesize, sync);
-  ConsCuStage cons(grid, tilesize, sync);
+  ProdCuStage prod(grid, tilesize, NoSync(), sync);
+  ConsCuStage cons(grid, tilesize, sync, NoSync());
   CuSync::setProducerConsumerPair(prod, cons);
 
   // Create and start timer

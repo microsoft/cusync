@@ -1,6 +1,7 @@
+include common.mk
+
 GOOGLE_TEST = tests/googletest
 GOOGLE_TEST_BUILD = $(GOOGLE_TEST)/build
-NVCC=/usr/local/cuda/bin/nvcc
 TEST_INCLUDE_DIRS = -Isrc/include/ -I$(GOOGLE_TEST)/googletest/include/ -L$(GOOGLE_TEST_BUILD)/lib/
 TEST_LFLAGS = -lgtest -lpthread
 GOOGLE_TEST_MAIN = $(GOOGLE_TEST)/googletest/src/gtest_main.cc

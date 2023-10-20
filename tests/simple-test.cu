@@ -61,8 +61,8 @@ bool run(int iters) {
 
   //Expected value of each semaphore is 1
   SyncPolicy sync;
-  ProdCuStage prod(grid, threads, sync);
-  ConsCuStage cons(grid, threads, sync);
+  ProdCuStage prod(grid, threads, NoSync(), sync);
+  ConsCuStage cons(grid, threads, sync, NoSync());
   CuSync::setProducerConsumerPair(prod, cons);
 
   CuSyncTest cutest(1);
@@ -105,30 +105,30 @@ bool run(int iters) {
 }
 
 TEST(SimpleTest_TileSync, NoOpts) {
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync>;
+  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync_MultiIters, NoOpts) {
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync>;
+  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(2);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, NoAtomicAdd) {
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync, Optimizations::NoAtomicAdd>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync, Optimizations::NoAtomicAdd>;
+  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
   
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, AvoidCustomOrder) {
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync, Optimizations::AvoidCustomOrder>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync, Optimizations::AvoidCustomOrder>;
+  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
   
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
