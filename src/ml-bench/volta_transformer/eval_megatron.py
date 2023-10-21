@@ -289,7 +289,7 @@ elif model == "gpt3" and attention_or_mlp == "mlp":
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    1024: {"TileSizes" : [256, 128, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    1024: {"TileSizes" : [256, 256, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
       "baseline": {"split_ks": [2,2]},
       "rowsync": {"split_ks": [1,1]},
       "tilesync": {"split_ks": [1,1],
@@ -298,10 +298,10 @@ elif model == "gpt3" and attention_or_mlp == "mlp":
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    512: {"TileSizes" : [256, 128, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [2,2]},
-      "rowsync": {"split_ks": [4,2]},
-      "tilesync": {"split_ks": [4,2],
+    512: {"TileSizes" : [256, 256, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+      "baseline": {"split_ks": [4,2]},
+      "rowsync": {"split_ks": [2,1]},
+      "tilesync": {"split_ks": [2,1],
                   "AvoidCustomOrder": False,
                   "AvoidWaitKernel": False,
                   "ReorderTileLoads": True,
@@ -653,7 +653,7 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
-for m in [2048]: #1,2,4,8,16,32,64,128,256,512,1024,
+for m in [256,512,1024,2048]: #1,2,4,8,16,32,64,128,
   if False:
     if attention_or_mlp == "attention":
       (s, o) = subprocess.getstatusoutput(f"python3 torch-baselines/torchAttention.py {m} {int(H/8)} {H} {H}")
