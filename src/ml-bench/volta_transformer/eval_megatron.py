@@ -413,9 +413,9 @@ elif model == "llama" and attention_or_mlp == "mlp":
   tiles = {
     2048: {
       "TileSizes" : [256, 128, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [2,2]},
-      "rowsync": {"split_ks": [2,1]},
-      "tilesync": {"split_ks": [2,1],
+      "baseline": {"split_ks": [1,1]},
+      "rowsync": {"split_ks": [1,1]},
+      "tilesync": {"split_ks": [1,1],
                   "AvoidCustomOrder": False,
                   "AvoidWaitKernel": False,
                   "ReorderTileLoads": True,}
@@ -455,20 +455,20 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "ReorderTileLoads": True},
     },
     64: {"TileSizes" : [64, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,4]},
-      "rowsync": {"split_ks": [6,4],
+      "baseline": {"split_ks": [6,2]},
+      "rowsync": {"split_ks": [6,2],
                    "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
-      "tilesync": {"split_ks": [6,4], "AvoidCustomOrder": True,
+      "tilesync": {"split_ks": [6,2], "AvoidCustomOrder": True,
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
     32: {"TileSizes" : [32, 256, 32, 32, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,2]},
-      "rowsync": {"split_ks": [6,2], 
+      "baseline": {"split_ks": [8,2]},
+      "rowsync": {"split_ks": [8,2], 
                    "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
-      "tilesync": {"split_ks": [6,2], "AvoidCustomOrder": True,
+      "tilesync": {"split_ks": [8,2], "AvoidCustomOrder": True,
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
@@ -653,7 +653,7 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
-for m in [256,512,1024,2048]: #1,2,4,8,16,32,64,128,
+for m in [512,1024,2048]: #1,2,4,8,16,32,64,128,256,
   if False:
     if attention_or_mlp == "attention":
       (s, o) = subprocess.getstatusoutput(f"python3 torch-baselines/torchAttention.py {m} {int(H/8)} {H} {H}")

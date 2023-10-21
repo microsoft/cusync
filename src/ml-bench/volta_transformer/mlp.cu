@@ -83,12 +83,12 @@ const uint Opts =
 #endif
 
 #include "common.h"
-const uint GLURowTile = 1;
+const uint GLURowTile = 8;
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<256, 256, 32>;
-using ShapeMMAWarp = cutlass::gemm::GemmShape<128, 64, 32>;
+using ShapeMMAWarp = cutlass::gemm::GemmShape<128, 128, 32>;
 #else
 //<eval tiles>
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;  
@@ -123,7 +123,7 @@ using SmArch = cutlass::arch::Sm70;
     using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
   #elif defined(MLP_GPT3)
     //First GeMM in MLP is fused with GELU
-    using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
+    using EpilogueOp1 = cutlass::epilogue::thread::LinearCombinationGELU<
   #endif
 #else
   //For correctness check no need to appy any epilogue
@@ -761,7 +761,7 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
     prod.invokeWaitKernel(streams[1]);
     //glu
     cusyncgluKernel<half, GLURowTile, ((8192/3+127)/128)*128>
-      <<<mlpParams.gemm_size1.m(), ShapeMMAThreadBlock::kN, 0, streams[1]>>>
+      <<<DIVUP(mlpParams.gemm_size1.m(), GLURowTile), ShapeMMAThreadBlock::kN, 0, streams[1]>>>
       (mlpParams.gemm_size1.m(), (half*)mlpParams.xvw1.device_data(), 
        (half*)mlpParams.glu.device_data(), mid);
   
