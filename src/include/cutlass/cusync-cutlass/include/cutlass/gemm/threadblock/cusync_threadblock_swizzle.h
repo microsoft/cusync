@@ -23,6 +23,13 @@ struct CuSyncGemmHorizontalThreadblockSwizzle : public GemmHorizontalThreadblock
                      (block_idx_x << log_tile) + ((block_idx_y) & ((1 << (log_tile)) - 1)),
                      block_idx_z};
   }
+
+  CUTLASS_DEVICE
+  GemmCoord get_tile_offset(int log_tile, int block_idx_x, int block_idx_y, int block_idx_z) const {
+    return GemmCoord{(block_idx_y >> log_tile),  //
+                    (block_idx_x << log_tile) + ((block_idx_y) & ((1 << (log_tile)) - 1)),
+                    block_idx_z};
+  }
 };
 
 template <int N = 1>

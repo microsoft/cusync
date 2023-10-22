@@ -125,9 +125,9 @@ private:
     CUDA_CHECK(cudaMalloc(&tileOrder, sizeof(*tileOrder) * numTiles()));
 
     for (uint z = 0; z < grid_.z; z++) {
-    for (uint x = 0; x < grid_.x; x++) {
     for (uint y = 0; y < grid_.y; y++) {
-      size_t id = RowMajorZYX()(grid_, {x, y, z});
+    for (uint x = 0; x < grid_.x; x++) {
+      size_t id = TileOrder()(grid_, {x, y, z});
       hTileOrder[id] = {x, y, z};
     }}}
 
@@ -211,6 +211,7 @@ public:
       uint idx = inputPolicy_.tileIndex(tile, prodGrid_);
       auto v = globalLoad(&tileStatusRead_[idx]);
       while(v < iter * w) {
+        // if (threadIdx.x == 0) printf("w %d tile {%d, %d, %d} v %d\n", w, tile.x, tile.y, tile.z, v);
         v = globalVolatileLoad(&tileStatusRead_[idx]);
       }
     }
@@ -273,6 +274,7 @@ public:
             *tileCounter = 0;
           }
           *shared_storage = tileOrder[linear_id];
+          dim3 t = *shared_storage;
         }
       }    
 

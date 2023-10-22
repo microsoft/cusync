@@ -378,7 +378,8 @@ struct CuSyncGemm {
       int lock = 0;
       if (params.grid_tiled_shape.k() == threadblock_tile_offset.k() + 1) {
         if (stage.isProducer()) {
-          dim3 tile = {block_idx_x, block_idx_y, block_idx_z};
+          dim3 tile = {(uint)threadblock_tile_offset.m(), (uint)threadblock_tile_offset.n(), 
+                       (uint)threadblock_tile_offset.k()};
           stage.post(tile);
         }
         // The final threadblock resets the semaphore for subsequent grids.
@@ -393,7 +394,8 @@ struct CuSyncGemm {
     }
 
     if (stage.isProducer() && (!kSplitKSerial || (kSplitKSerial && params.grid_tiled_shape.k() == 1))) {
-      dim3 tile = {block_idx_x, block_idx_y, block_idx_z};
+      dim3 tile = {(uint)threadblock_tile_offset.m(), (uint)threadblock_tile_offset.n(), 
+                   (uint)threadblock_tile_offset.k()};
       stage.post(tile);
     }
   }
