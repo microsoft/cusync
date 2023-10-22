@@ -30,6 +30,27 @@ struct CuSyncGemmHorizontalThreadblockSwizzle : public GemmHorizontalThreadblock
                     (block_idx_x << log_tile) + ((block_idx_y) & ((1 << (log_tile)) - 1)),
                     block_idx_z};
   }
+
+  CUTLASS_HOST_DEVICE
+  GemmCoord get_tiled_shape(
+    GemmCoord problem_size,
+    GemmCoord tile_size,
+    int split_k_slices) const {
+      return GemmHorizontalThreadblockSwizzle::get_tiled_shape(problem_size, tile_size, split_k_slices);
+  }
+  CUTLASS_HOST_DEVICE
+  GemmCoord get_tiled_shape(
+    cutlass::conv::Operator conv_operator,
+    cutlass::conv::Conv2dProblemSize const &problem_size,
+    GemmCoord tile_size,
+    int split_k_slices) const {
+
+    gemm::GemmCoord implicit_gemm_problem_size = 
+    cutlass::conv::implicit_gemm_problem_size(conv_operator, problem_size);
+
+    return GemmHorizontalThreadblockSwizzle::get_tiled_shape(
+      implicit_gemm_problem_size, tile_size, split_k_slices);
+  }
 };
 
 template <int N = 1>

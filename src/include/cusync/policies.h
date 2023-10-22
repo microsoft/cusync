@@ -179,7 +179,7 @@ struct Conv2DTileSync {
    */
   __device__ __forceinline__
   uint tileIndex(const dim3& tile, const dim3& grid) {
-    return tile.x * grid.y + tile.y;
+    return tile.x * grid.y + tile.y/(R*S);
   }
 
   /*

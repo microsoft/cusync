@@ -85,14 +85,29 @@ using ThreadblockShape = cutlass::gemm::GemmShape<64, 64, 32>;
 using WarpShape = cutlass::gemm::GemmShape<32, 32, 32>;
 //</eval tiles>
 
-#ifdef ROWSYNC 
-  using Sync = RowSync;
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, RowSync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, RowSync>;
+
+const uint Opts = 
+#ifdef AVOID_CUSTOM_ORDER
+  Optimizations::AvoidCustomOrder |
+#endif
+#ifdef AVOID_WAIT_KERNEL
+  Optimizations::AvoidWaitKernel  |
+#endif
+#ifdef NO_ATOMIC_ADD
+  Optimizations::NoAtomicAdd      |
+#endif
+#ifdef REORDER_TILE_LOADS
+  Optimizations::ReorderTileLoads |
+#endif
+  Optimizations::NoOptimization;
+
+#ifdef ROWSYNC
+  using ProdCuStage = CuStage<OrderXYZ, NoSync, RowSync, Opts>;
+  using ConsCuStage = CuStage<OrderXYZ, RowSync, NoSync, Opts>;
 #elif defined(TILESYNC)
-  using Sync = Conv2DTileSync<3,3>;
-  using ProdCuStage = CuStage<CuStageType::Producer, RowMajorZYX, Sync>;
-  using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorZYX, Sync>;
+  using Conv2DSync = Conv2DTileSync<3,3>;
+  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync, Opts>;
+  using ConsCuStage = CuStage<OrderXYZ, Conv2DSync, NoSync, Opts>;
 #else
   #error "Unknown Synchronization"
 #endif
@@ -110,7 +125,7 @@ using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
 #ifdef STREAM_K
 using SwizzleThreadBlock = cutlass::gemm::threadblock::ThreadblockSwizzleStreamK;
 #else
-using SwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;
+using SwizzleThreadBlock = cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle;
 #endif
 
 using Conv2dFpropKernel = 
@@ -171,6 +186,7 @@ using ConsConv2dKernel =
                                             cutlass::arch::OpMultiplyAdd,
                                             cutlass::conv::IteratorAlgorithm::kAnalytic
                                           >::Kernel;
+
 using ProdCuSyncImplicitGemm1 = device::CuSyncImplicitGemmConvolution<ProdCuStage, ProdConv2dKernel>;
 using ConsCuSyncImplicitGemm2 = device::CuSyncImplicitGemmConvolution<ConsCuStage, ConsConv2dKernel>;
 
@@ -742,23 +758,24 @@ Result profile_convolution(Options const &options) {
 
   auto gemm_problem_size = cutlass::conv::implicit_gemm_problem_size(cutlass::conv::Operator::kFprop, problem_size);
   printf("gemm problem size: {%d, %d, %d}\n", gemm_problem_size.m(), gemm_problem_size.n(), gemm_problem_size.k());
-  dim3 gridDim = {(gemm_problem_size.m()+ThreadblockShape::kM-1)/ThreadblockShape::kM, 
-      (gemm_problem_size.n() + ThreadblockShape::kN - 1)/ThreadblockShape::kN, options.split_k_slices};
-  dim3 tileSize = {ThreadblockShape::kM, ThreadblockShape::kN, 1};
-  printf("gridDim: {%d, %d, %d}\n", gridDim.x, gridDim.y, gridDim.z);
+  cutlass::gemm::GemmCoord tileSize = {ThreadblockShape::kM, ThreadblockShape::kN, 1};
+  cutlass::gemm::GemmCoord gridDim = CuSyncSwizzleThreadBlock().get_tiled_shape(gemm_problem_size, tileSize, options.split_k_slices);
+  printf("gridDim: {%d, %d, %d}\n", gridDim.m(), gridDim.n(), gridDim.k());
 
   
 #if defined(ROWSYNC)
   using Sync = RowSync;
-  RowSync sync(gridDim.y);
+  RowSync sync1(gridDim.n());
+  RowSync sync2(gridDim.n());
 #elif defined(TILESYNC)
-  Sync sync;
+  TileSync sync1;
+  Conv2DSync sync2;
 #else
   #error "Unkown Policy"
 #endif
 
-  ProdCuStage prod(gridDim, tileSize, sync);
-  ConsCuStage cons(gridDim, tileSize, sync);
+  ProdCuStage prod(CuSyncSwizzleThreadBlock().get_grid_shape(gridDim), {1,1,1}, NoSync(), sync1);
+  ConsCuStage cons(CuSyncSwizzleThreadBlock().get_grid_shape(gridDim), {1,1,1}, sync2, NoSync());
   
   CuSync::setProducerConsumerPair(prod, cons);
   cutlass::reference::host::TensorFill(
