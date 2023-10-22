@@ -69,12 +69,12 @@ const uint Opts =
   Optimizations::NoOptimization;
 
 #ifdef ROWSYNC
-  using ProdCuStage   = CuStage<RowMajorXYZ, NoSync,  RowSync, Opts>;
-  using ConsCuStage   = CuStage<RowMajorXYZ, RowSync, NoSync,  Opts>;
+  using ProdCuStage   = CuStage<OrderXYZ, NoSync,  RowSync, Opts>;
+  using ConsCuStage   = CuStage<OrderXYZ, RowSync, NoSync,  Opts>;
   using Sync = RowSync;
 #elif defined(TILESYNC)
-  using ProdCuStage   = CuStage<RowMajorXYZ, NoSync,   TileSync, Opts>;
-  using ConsCuStage   = CuStage<RowMajorXYZ, TileSync, NoSync,   Opts>;
+  using ProdCuStage   = CuStage<OrderXYZ, NoSync,   TileSync, Opts>;
+  using ConsCuStage   = CuStage<OrderXYZ, TileSync, NoSync,   Opts>;
   using Sync = TileSync;
 #else
   #error "Unknown Synchronization"

@@ -105,30 +105,30 @@ bool run(int iters) {
 }
 
 TEST(SimpleTest_TileSync, NoOpts) {
-  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync>;
-  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
+  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync>;
+  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync_MultiIters, NoOpts) {
-  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync>;
-  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
+  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync>;
+  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(2);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, NoAtomicAdd) {
-  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync, Optimizations::NoAtomicAdd>;
-  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
+  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync, Optimizations::NoAtomicAdd>;
+  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
   
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, AvoidCustomOrder) {
-  using ProdCuStage = CuStage<RowMajorXYZ, NoSync, TileSync, Optimizations::AvoidCustomOrder>;
-  using ConsCuStage = CuStage<RowMajorXYZ, TileSync, NoSync>;
+  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync, Optimizations::AvoidCustomOrder>;
+  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
   
   bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);

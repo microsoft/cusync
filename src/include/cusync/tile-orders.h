@@ -10,20 +10,20 @@ namespace cusync {
  */
 
 /*
- * RowMajorZYX order that generates tile indices first for Z-dimension, then 
+ * OrderZYX order that generates tile indices first for Z-dimension, then 
  * Y-dimension, and finally X-dimension.
  */
-struct RowMajorZYX {
+struct OrderZYX {
   size_t operator()(const dim3& grid, const dim3& tile) {
     return tile.z + tile.y * grid.z + tile.x * grid.y * grid.z;
   }
 };
 
 /*
- * RowMajorXYZ order that generates tile indices first for X-dimension, then 
+ * OrderXYZ order that generates tile indices first for X-dimension, then 
  * Y-dimension, and finally Z-dimension.
  */
-struct RowMajorXYZ {
+struct OrderXYZ {
   size_t operator()(const dim3& grid, const dim3& tile) {
     return tile.x + tile.y * grid.x + tile.z * grid.x * grid.y;
   }
