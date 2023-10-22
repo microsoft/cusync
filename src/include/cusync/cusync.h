@@ -202,7 +202,6 @@ public:
   void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return;
     if (!inputPolicy_.isSync(tile, prodGrid_)) return;
-    // if (prodGrid_.y == grid_.y) return;
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
       if (std::is_same<InputSyncPolicy, Conv2DTileSync<3,3>>::value) {
         tile.y = tile.y/9;
