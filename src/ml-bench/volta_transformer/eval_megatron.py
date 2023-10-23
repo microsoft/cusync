@@ -110,9 +110,16 @@ def makeFiles(syncPolicies, attention_or_mlp):
 def genFiles(batchInfo, syncPolicy, attention_or_mlp):
   inMLPFile = "mlp.cu" if attention_or_mlp == "mlp" else "attention.cu"
   outMLPFile = buildDir(attention_or_mlp + "-eval-" + syncPolicy + ".cu")
-  tilesCode = """using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<%d, %d, %d>;  
-using ShapeMMAWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
-  tilesCode = tilesCode % tuple(batchInfo["TileSizes"])
+  tilesTemplate = """using ShapeThreadBlock%d = cutlass::gemm::GemmShape<%d, %d, %d>;  
+using ShapeWarp%d = cutlass::gemm::GemmShape<%d, %d, %d>;"""
+  tilesCode = ""
+  if len(batchInfo["TileSizes"]) > 1:
+    for i,tile in enumerate(batchInfo["TileSizes"]):
+      tilesCode += tilesTemplate % tuple([i+1] + tile[:3] + [i+1] + tile[3:])
+      tilesCode += "\n"
+  else:
+    tilesCode = tilesTemplate % tuple(batchInfo["TileSizes"])
+
   batchInfo = batchInfo["tilesync"] if syncPolicy == "stridedsync" or syncPolicy == 'baseline' else batchInfo[syncPolicy]
   if "SoftmaxRowTile" in batchInfo:
     tilesCode += "\nconst uint SoftmaxRowTile = %d;"%batchInfo["SoftmaxRowTile"]
@@ -279,8 +286,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
 elif model == "gpt3" and attention_or_mlp == "mlp":
     # Dictionary of tile sizes for each M
   tiles = {
-    2048: {
-      "TileSizes" : [256, 256, 32, 128, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    2048: {"TileSizes" : [[256, 256, 32, 128, 128, 32], [256, 256, 32, 128, 128, 32]],
       "baseline": {"split_ks": [1,1]},
       "rowsync": {"split_ks": [1,1]},
       "tilesync": {"split_ks": [1,1],
@@ -289,7 +295,7 @@ elif model == "gpt3" and attention_or_mlp == "mlp":
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    1024: {"TileSizes" : [256, 256, 32, 128, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    1024: {"TileSizes" : [[256, 256, 32, 128, 128, 32], [256, 256, 32, 128, 128, 32]],
       "baseline": {"split_ks": [2,1]},
       "rowsync": {"split_ks": [2,1]},
       "tilesync": {"split_ks": [2,1],
@@ -298,7 +304,7 @@ elif model == "gpt3" and attention_or_mlp == "mlp":
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    512: {"TileSizes" : [256, 256, 32, 128, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    512: {"TileSizes" : [[256, 256, 32, 128, 128, 32], [256, 256, 32, 128, 128, 32]],
       "baseline": {"split_ks": [2,1]},
       "rowsync": {"split_ks": [2,1]},
       "tilesync": {"split_ks": [2,1],
@@ -307,7 +313,7 @@ elif model == "gpt3" and attention_or_mlp == "mlp":
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    256: {"TileSizes" : [256, 128, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    256: {"TileSizes" : [[256, 128, 32, 128, 64, 32], [256, 128, 32, 128, 64, 32]],
       "baseline": {"split_ks": [4,2]},
       "rowsync": {"split_ks": [4,2],
                    "AvoidWaitKernel": True,
@@ -318,7 +324,7 @@ elif model == "gpt3" and attention_or_mlp == "mlp":
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    128: {"TileSizes" : [128, 256, 32, 64, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    128: {"TileSizes" : [[128, 256, 32, 64, 128, 32], [128, 256, 32, 64, 128, 32]],
       "baseline": {"split_ks": [3,3]},
       "rowsync": {"split_ks": [3,3],
                    "AvoidWaitKernel": True,
@@ -329,81 +335,81 @@ elif model == "gpt3" and attention_or_mlp == "mlp":
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    64: {"TileSizes" : [64, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    64: {"TileSizes" : [[64, 256, 32, 32, 128, 32], [64, 256, 32, 32, 128, 32]],
       "baseline": {"split_ks": [6,3]},
       "rowsync": {"split_ks": [6,3],
-                   "AvoidWaitKernel": False,
+                   "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
       "tilesync": {"split_ks": [4,3],
                   "AvoidCustomOrder": True,
-                  "AvoidWaitKernel": False,
+                  "AvoidWaitKernel": True,
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    32: {"TileSizes" : [32, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,3]},
-      "rowsync": {"split_ks": [6,3],
-                   "AvoidWaitKernel": False,
+    32: {"TileSizes" : [[32, 256, 32, 32, 64, 32], [32, 128, 32, 32, 32, 32]],
+      "baseline": {"split_ks": [4,3]},
+      "rowsync": {"split_ks": [4,3],
+                   "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
       "tilesync": {"split_ks": [4,3],
                   "TileBatchSync":2,
                   "AvoidCustomOrder": True,
-                  "AvoidWaitKernel": False,
+                  "AvoidWaitKernel": True,
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    16: {"TileSizes" : [32, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,3]},
-      "rowsync": {"split_ks": [6,3],
-                   "AvoidWaitKernel": False,
+    16: {"TileSizes" : [[32, 256, 32, 32, 64, 32], [32, 128, 32, 32, 32, 32]],
+      "baseline": {"split_ks": [4,3]},
+      "rowsync": {"split_ks": [4,3],
+                   "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
       "tilesync": {"split_ks": [4,3],
                   "AvoidCustomOrder": True,
-                  "AvoidWaitKernel": False,
+                  "AvoidWaitKernel": True,
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    8: {"TileSizes" : [32, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,3]},
-      "rowsync": {"split_ks": [6,3],
-                   "AvoidWaitKernel": False,
+    8: {"TileSizes" : [[32, 256, 32, 32, 64, 32], [32, 128, 32, 32, 32, 32]],
+      "baseline": {"split_ks": [4,3]},
+      "rowsync": {"split_ks": [4,3],
+                   "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
       "tilesync": {"split_ks": [4,3],
                     "AvoidCustomOrder": True,
-                    "AvoidWaitKernel": False,
+                    "AvoidWaitKernel": True,
                     "ReorderTileLoads": True,
                     "NoAtomicAdd": True}
     },
-    4: {"TileSizes" : [32, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,3]},
-      "rowsync": {"split_ks": [6,3],
-                   "AvoidWaitKernel": False,
+    4: {"TileSizes" : [[32, 256, 32, 32, 64, 32], [32, 128, 32, 32, 32, 32]],
+      "baseline": {"split_ks": [4,3]},
+      "rowsync": {"split_ks": [4,3],
+                   "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
       "tilesync": {"split_ks": [4,3],
                   "AvoidCustomOrder": True,
-                  "AvoidWaitKernel": False,
+                  "AvoidWaitKernel": True,
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    2: {"TileSizes" : [32, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,3]},
+    2: {"TileSizes" : [[32, 256, 32, 32, 64, 32], [32, 128, 32, 32, 32, 32]],
+      "baseline": {"split_ks": [4,3]},
       "rowsync": {"split_ks": [4,3],
-                   "AvoidWaitKernel": False,
+                   "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
       "tilesync": {"split_ks": [4,3], 
                   "AvoidCustomOrder": True,
-                  "AvoidWaitKernel": False,
+                  "AvoidWaitKernel": True,
                   "ReorderTileLoads": True,
                   "NoAtomicAdd": True}
     },
-    1: {"TileSizes" : [32, 256, 32, 32, 128, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
-      "baseline": {"split_ks": [6,3]},
-      "rowsync": {"split_ks": [6,3],
-                   "AvoidWaitKernel": False,
+    1: {"TileSizes" : [[32, 256, 32, 32, 64, 32], [32, 128, 32, 32, 32, 32]],
+      "baseline": {"split_ks": [4,3]},
+      "rowsync": {"split_ks": [4,3],
+                   "AvoidWaitKernel": True,
                    "AvoidCustomOrder": True},
       "tilesync": {"split_ks": [4,3],
                    "AvoidCustomOrder": True,
-                   "AvoidWaitKernel": False,
+                   "AvoidWaitKernel": True,
                    "ReorderTileLoads": True,
                    "NoAtomicAdd": True},
     },
@@ -412,7 +418,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
     # Dictionary of tile sizes for each M
   tiles = {
     2048: {
-      "TileSizes" : [256, 256, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+      "TileSizes" : [[256, 256, 32, 128, 64, 32], [256, 256, 32, 128, 64, 32]],
       "baseline": {"split_ks": [3,1]},
       "rowsync": {"split_ks": [1,1]},
       "tilesync": {"split_ks": [1,1],
@@ -420,7 +426,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                   "AvoidWaitKernel": False,
                   "ReorderTileLoads": True,}
     },
-    1024: {"TileSizes" : [256, 256, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    1024: {"TileSizes" : [[256, 256, 32, 128, 64, 32], [256, 256, 32, 128, 64, 32]],
       "baseline": {"split_ks": [2,1]},
       "rowsync": {"split_ks": [2,1]},
       "tilesync": {"split_ks": [2,1],
@@ -428,7 +434,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                   "AvoidWaitKernel": False,
                   "ReorderTileLoads": True,}
     },
-    512: {"TileSizes" : [256, 256, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    512: {"TileSizes" : [[256, 256, 32, 128, 64, 32], [256, 256, 32, 128, 64, 32]],
       "baseline": {"split_ks": [3,1]},
       "rowsync": {"split_ks": [2,1]},
       "tilesync": {"split_ks": [2,1],
@@ -436,7 +442,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                   "AvoidWaitKernel": False,
                   "ReorderTileLoads": True,}
     },
-    256: {"TileSizes" : [256, 128, 32, 128, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    256: {"TileSizes" : [[256, 128, 32, 128, 64, 32], [256, 128, 32, 128, 64, 32]],
       "baseline": {"split_ks": [6,4]},
       "rowsync": {"split_ks": [4,4], 
                   "AvoidWaitKernel": True,
@@ -445,7 +451,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    128: {"TileSizes" : [128, 128, 32, 64, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    128: {"TileSizes" : [[128, 128, 32, 64, 64, 32], [128, 128, 32, 64, 64, 32]],
       "baseline": {"split_ks": [8,2]},
       "rowsync": {"split_ks": [4,2], 
                    "AvoidWaitKernel": True,
@@ -454,7 +460,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    64: {"TileSizes" : [64, 128, 32, 32, 64, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    64: {"TileSizes" : [[64, 128, 32, 32, 64, 32], [64, 128, 32, 32, 64, 32]],
       "baseline": {"split_ks": [8,8]},
       "rowsync": {"split_ks": [8,8],
                    "AvoidWaitKernel": True,
@@ -463,7 +469,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    32: {"TileSizes" : [32, 128, 32, 32, 32, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    32: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
       "baseline": {"split_ks": [4,8]},
       "rowsync": {"split_ks": [8,8], 
                    "AvoidWaitKernel": True,
@@ -472,7 +478,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    16: {"TileSizes" : [32, 128, 32, 32, 32, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    16: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
       "baseline": {"split_ks": [4,8]},
       "rowsync": {"split_ks": [8,8], 
                    "AvoidWaitKernel": True,
@@ -481,7 +487,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    8: {"TileSizes" : [32, 128, 32, 32, 32, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    8: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
       "baseline": {"split_ks": [4,8]},
       "rowsync": {"split_ks": [8,8], 
                    "AvoidWaitKernel": True,
@@ -490,7 +496,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    4: {"TileSizes" : [32, 128, 32, 32, 32, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    4: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
       "baseline": {"split_ks": [4,8]},
       "rowsync": {"split_ks": [8,8], 
                    "AvoidWaitKernel": True,
@@ -499,7 +505,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    2: {"TileSizes" : [32, 128, 32, 32, 32, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    2: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
       "baseline": {"split_ks": [4,8]},
       "rowsync": {"split_ks": [8,8], 
                    "AvoidWaitKernel": True,
@@ -508,7 +514,7 @@ elif model == "llama" and attention_or_mlp == "mlp":
                                       "AvoidWaitKernel": True,
                                       "ReorderTileLoads": True},
     },
-    1: {"TileSizes" : [32, 128, 32, 32, 32, 32], "MaxTBsPerSM": 2, "Best-Policy": "Row-Sync",
+    1: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
       "baseline": {"split_ks": [4,8]},
       "rowsync": {"split_ks": [8,8], 
                    "AvoidWaitKernel": True,

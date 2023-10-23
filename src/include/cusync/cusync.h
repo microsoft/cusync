@@ -210,8 +210,6 @@ public:
       while(v < iter * w) {
         v = globalVolatileLoad(&tileStatusRead_[idx]);
       }
-      // printf("214: w %d tile {%d, %d, %d} idx %d v %d iter %d\n", 
-      //        w, tile.x, tile.y, tile.z, idx, v, iter);
     }
 
     if (callSync)

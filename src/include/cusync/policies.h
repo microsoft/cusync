@@ -29,6 +29,7 @@ struct NoSync {
 /*
  * RowSync policy assigns same semaphore for tiles sharing the same row (x index of tile)
  */
+template<uint TileM>
 struct RowSync {
   //Value to wait on for each row
   uint waitValue_;
@@ -65,7 +66,7 @@ struct RowSync {
    * Returns the tile index as the x index of tile
    */
   __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
-    return tile.x;
+    return tile.x/TileM;
   }
 
   /*
@@ -73,7 +74,7 @@ struct RowSync {
    * i.e., y index is 0
    */
   __device__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y == 0;
+    return tile.z == 1;
   }
 
   /*
@@ -87,7 +88,7 @@ struct RowSync {
 /*
  * TileSync assigns distinct semaphore to each tile
  */
-template<typename TileOrder>
+template<typename TileOrder, uint TileM, uint TileN>
 struct TileSync {
   uint waitValue_;
   uint postValue_;
@@ -122,14 +123,14 @@ struct TileSync {
    * Return the linear tile index for the grid
    */
   __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-    return TileOrder().tileIndex({tile.x, tile.y, 0}, grid);
+    return TileOrder().tileIndex({tile.x/TileM, tile.y/TileN, 0}, grid);
   }
 
   /*
    * Always synchronize on a tile
    */
   __device__ __forceinline__ bool isSync(const dim3& tile, const dim3& grid) {
-    return true;
+    return tile.y%TileN == 0;
   }
 };
 

@@ -68,31 +68,35 @@ const uint Opts =
 #endif
   Optimizations::NoOptimization;
 
-#ifdef ROWSYNC
-  using ProdCuStage   = CuStage<OrderXYZ, NoSync,  RowSync, Opts>;
-  using ConsCuStage   = CuStage<OrderXYZ, RowSync, NoSync,  Opts>;
-  using Sync = RowSync;
-#elif defined(TILESYNC)
-  using ProdCuStage   = CuStage<OrderXYZ, NoSync,   TileSync<OrderXYZ>, Opts>;
-  using ConsCuStage   = CuStage<OrderXYZ, TileSync<OrderXYZ>, NoSync,   Opts>;
-  using Sync = TileSync<OrderXYZ>;
-#else
-  #error "Unknown Synchronization"
-#endif
-
 #include "common.h"
-const uint GLURowTile = 8;
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
-using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;
-using ShapeMMAWarp = cutlass::gemm::GemmShape<32, 128, 32>;
+using ShapeThreadBlock1 = cutlass::gemm::GemmShape<256, 256, 32>;
+using ShapeWarp1 = cutlass::gemm::GemmShape<128, 64, 32>;
+
+using ShapeThreadBlock2 = cutlass::gemm::GemmShape<256, 256, 32>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<128, 64, 32>;
 #else
 //<eval tiles>
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;  
 using ShapeMMAWarp = cutlass::gemm::GemmShape<32, 64, 32>;
 //</eval tiles>
 #endif
+
+#ifdef ROWSYNC
+  using ProdCuStage   = CuStage<OrderXYZ, NoSync,  RowSync<ShapeThreadBlock1::kM>, Opts>;
+  using ConsCuStage   = CuStage<OrderXYZ, RowSync<ShapeThreadBlock1::kM>, NoSync,  Opts>;
+  using Sync = RowSync<ShapeThreadBlock1::kM>;
+#elif defined(TILESYNC)
+  using Sync = TileSync<OrderXYZ, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
+  using ProdCuStage   = CuStage<OrderXYZ, NoSync, Sync, Opts>;
+  using ConsCuStage   = CuStage<OrderXYZ, Sync,   NoSync,   Opts>;
+#else
+  #error "Unknown Synchronization"
+#endif
+
+const uint GLURowTile = 8;
 
 using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 4>;  
 
@@ -125,7 +129,7 @@ using SmArch = cutlass::arch::Sm70;
   #endif
 #else
   //For correctness check no need to appy any epilogue
-  using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
+  using EpilogueOp1 = cutlass::epilogue::thread::LinearCombinationGELU<
 #endif
     ElementOutput,                                        
     128 / cutlass::sizeof_bits<ElementOutput>::value,
@@ -140,42 +144,42 @@ using EpilogueOp2 = cutlass::epilogue::thread::LinearCombination<
     ElementAccumulator,
     ElementComputeEpilogue>;
 
-template<typename EpilogueOp, bool splitK>
+template<typename EpilogueOp, typename ShapeThreadBlock, typename ShapeWarp, bool splitK>
 class BaseMLPGemm : public cutlass::gemm::device::Gemm<ElementInputA, LayoutInputA, 
                                                        ElementInputB, LayoutInputB,
                                                        ElementOutput, LayoutOutput,
-                                                        ElementAccumulator, MMAOp,
-                                                        SmArch, ShapeMMAThreadBlock,
-                                                        ShapeMMAWarp, ShapeMMAOp,
-                                                        EpilogueOp, 
-                                                        cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle,
-                                                        2, 8, 8, splitK> {};
+                                                       ElementAccumulator, MMAOp,
+                                                       SmArch, ShapeThreadBlock,
+                                                       ShapeWarp, ShapeMMAOp,
+                                                       EpilogueOp, 
+                                                       cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle,
+                                                       2, 8, 8, splitK> {};
 // Baseline GeMMs
-using Gemm1 = BaseMLPGemm<EpilogueOp1, false>;
-using Gemm2 = BaseMLPGemm<EpilogueOp2, false>;
+using Gemm1 = BaseMLPGemm<EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, false>;
+using Gemm2 = BaseMLPGemm<EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, false>;
 
 //Baseline GeMMs with SplitK enabled
-using GemmSplitK1 = BaseMLPGemm<EpilogueOp1, true>;
-using GemmSplitK2 = BaseMLPGemm<EpilogueOp2, true>;
+using GemmSplitK1 = BaseMLPGemm<EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, true>;
+using GemmSplitK2 = BaseMLPGemm<EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, true>;
 
 //CuSync GeMMs
 using CuSyncGeMMSwizzle = cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle;
-template<typename CuStage, typename EpilogueOp, bool splitK>
+template<typename CuStage, typename EpilogueOp, typename ShapeThreadBlock, typename ShapeWarp, bool splitK>
 class CuSyncMLPGemm : public cutlass::gemm::device::CuSyncGemm<CuStage, ElementInputA, LayoutInputA, 
-                                                       ElementInputB, LayoutInputB,
-                                                       ElementOutput, LayoutOutput,
-                                                        ElementAccumulator, MMAOp,
-                                                        SmArch, ShapeMMAThreadBlock,
-                                                        ShapeMMAWarp, ShapeMMAOp,
-                                                        EpilogueOp, 
-                                                        CuSyncGeMMSwizzle,
-                                                        2, 8, 8, splitK> {};
+                                                               ElementInputB, LayoutInputB,
+                                                               ElementOutput, LayoutOutput,
+                                                               ElementAccumulator, MMAOp,
+                                                               SmArch, ShapeThreadBlock,
+                                                               ShapeWarp, ShapeMMAOp,
+                                                               EpilogueOp, 
+                                                               CuSyncGeMMSwizzle,
+                                                               2, 8, 8, splitK> {};
 
-using CuSyncGemm1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, false>;
-using CuSyncGemm2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, false>;
+using CuSyncGemm1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, false>;
+using CuSyncGemm2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, false>;
 
-using CuSyncGemmSplitK1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, true>;
-using CuSyncGemmSplitK2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, true>;
+using CuSyncGemmSplitK1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, true>;
+using CuSyncGemmSplitK2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, true>;
 
 using HostTensor = cutlass::HostTensor<ElementInputA, LayoutInputA>;
 
@@ -428,17 +432,19 @@ cudaError_t runBaselineGPT3(int split_k1, int split_k2,
   CUTLASS_CHECK(status);
   
   execTime = 0;
-  
+  cudaStream_t stream2;
+  CUDA_CHECK(cudaStreamCreate(&stream2));
+
   //Run kernels
   for (int r = 0; r < iters; r++) {    
     double start = timeInMicroSeconds();
-    status = gemm_op1(args1, workspace1.get(), stream);
+    status = gemm_op1(stream);
     CUTLASS_CHECK(status);
     CUDA_CHECK(cudaStreamSynchronize(stream));
     double middle1 = timeInMicroSeconds();
     double iterMatMul1 = middle1-start;
     matmul1Time += iterMatMul1;
-    status = gemm_op2(args2, workspace2.get(), stream);
+    status = gemm_op2(stream2);
     CUTLASS_CHECK(status);
     CUDA_CHECK(cudaDeviceSynchronize());
     double middle3 = timeInMicroSeconds();
@@ -959,22 +965,21 @@ int run(int argc, char* argv[]) {
   if (doChecking) {
     mlpParams.initOuts();
   }
-  printf("mlpParams.gemm_size1.n() %d ShapeMMAThreadBlock::kN %d\n", mlpParams.gemm_size1.n(), ShapeMMAThreadBlock::kN);
   //Setup cusync gemm
-  cutlass::gemm::GemmCoord tileSizeCoord1{ShapeMMAThreadBlock::kM, ShapeMMAThreadBlock::kN, 1};
-  cutlass::gemm::GemmCoord tileSizeCoord2{ShapeMMAThreadBlock::kM, ShapeMMAThreadBlock::kN, 1};
+  cutlass::gemm::GemmCoord tileSizeCoord1{ShapeThreadBlock1::kM, ShapeThreadBlock1::kN, 1};
+  cutlass::gemm::GemmCoord tileSizeCoord2{ShapeThreadBlock2::kM, ShapeThreadBlock2::kN, 1};
 
   cutlass::gemm::GemmCoord gridDim1 = CuSyncGeMMSwizzle().get_tiled_shape(mlpParams.gemm_size1, tileSizeCoord1, split_k1);
   cutlass::gemm::GemmCoord gridDim2 = CuSyncGeMMSwizzle().get_tiled_shape(mlpParams.gemm_size2, tileSizeCoord2, split_k2);
 
 #if defined(ROWSYNC)
-  using Sync = RowSync;
-  RowSync sync(gridDim1.n());
+  using Sync = RowSync<ShapeThreadBlock1::kM>;
+  Sync sync(gridDim1.n());
 #elif defined(TILEBATCH)
   using Sync = TileSync<2>;
   Sync sync;
 #elif defined(TILESYNC)
-  using Sync = TileSync<OrderXYZ>;
+  using Sync = TileSync<OrderXYZ, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
   Sync sync;
 #elif defined(BATCHEDROW)
   using Sync = BatchedRowSync;

@@ -378,7 +378,7 @@ struct CuSyncGemm {
       int lock = 0;
       if (params.grid_tiled_shape.k() == threadblock_tile_offset.k() + 1) {
         if (stage.isProducer()) {
-          dim3 tile = {(uint)threadblock_tile_offset.m(), (uint)threadblock_tile_offset.n(), 
+          dim3 tile = {(uint)threadblock_offset.row(), (uint)threadblock_offset.column(), 
                        (uint)threadblock_tile_offset.k()};
           stage.post(tile);
         }
@@ -394,7 +394,7 @@ struct CuSyncGemm {
     }
 
     if (stage.isProducer() && (!kSplitKSerial || (kSplitKSerial && params.grid_tiled_shape.k() == 1))) {
-      dim3 tile = {(uint)threadblock_tile_offset.m(), (uint)threadblock_tile_offset.n(), 
+      dim3 tile = {(uint)threadblock_offset.row(), (uint)threadblock_offset.column(), 
                    (uint)threadblock_tile_offset.k()};
       stage.post(tile);
     }

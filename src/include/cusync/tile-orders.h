@@ -14,8 +14,19 @@ namespace cusync {
  * Y-dimension, and finally X-dimension.
  */
 struct OrderZYX {
+  __device__ __host__ __forceinline__
   size_t operator()(const dim3& grid, const dim3& tile) {
     return tile.z + tile.y * grid.z + tile.x * grid.y * grid.z;
+  }
+  __device__ __host__ __forceinline__
+  dim3 tileToBlock(const dim3& tile) {
+    return dim3{tile.x, tile.y, tile.z};
+  }
+
+  __device__ __host__ __forceinline__
+  uint tileIndex(const dim3& tile, const dim3& grid) {
+    dim3 block = tileToBlock(tile);
+    return this->operator()(grid, block);
   }
 };
 
