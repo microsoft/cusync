@@ -105,8 +105,8 @@ const uint Opts =
   using ProdCuStage = CuStage<OrderXYZ, NoSync, RowSync, Opts>;
   using ConsCuStage = CuStage<OrderXYZ, RowSync, NoSync, Opts>;
 #elif defined(TILESYNC)
-  using Conv2DSync = Conv2DTileSync<3,3>;
-  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync, Opts>;
+  using Conv2DSync = Conv2DTileSync<OrderXYZ,3,3>;
+  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync<OrderXYZ>, Opts>;
   using ConsCuStage = CuStage<OrderXYZ, Conv2DSync, NoSync, Opts>;
 #else
   #error "Unknown Synchronization"
@@ -149,7 +149,7 @@ using Conv2dFpropKernel =
 using BaselineImplicitGemm1 = device::ImplicitGemmConvolution<Conv2dFpropKernel>;
 using BaselineImplicitGemm2 = device::ImplicitGemmConvolution<Conv2dFpropKernel>;
 
-using CuSyncSwizzleThreadBlock = cutlass::gemm::threadblock::CuSyncGemmIdentityThreadblockSwizzle<>;
+using CuSyncSwizzleThreadBlock = cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle;
 
 using ProdConv2dKernel =
   typename kernel::CuSyncDefaultConv2dFprop<ProdCuStage,
@@ -768,14 +768,14 @@ Result profile_convolution(Options const &options) {
   RowSync sync1(gridDim.n());
   RowSync sync2(gridDim.n());
 #elif defined(TILESYNC)
-  TileSync sync1;
+  TileSync<OrderXYZ> sync1;
   Conv2DSync sync2;
 #else
   #error "Unkown Policy"
 #endif
-
-  ProdCuStage prod(CuSyncSwizzleThreadBlock().get_grid_shape(gridDim), {1,1,1}, NoSync(), sync1);
-  ConsCuStage cons(CuSyncSwizzleThreadBlock().get_grid_shape(gridDim), {1,1,1}, sync2, NoSync());
+  auto grid_shape = CuSyncSwizzleThreadBlock().get_grid_shape(gridDim);
+  ProdCuStage prod(grid_shape, {1,1,1}, NoSync(), sync1);
+  ConsCuStage cons(grid_shape, {1,1,1}, sync2, NoSync());
   
   CuSync::setProducerConsumerPair(prod, cons);
   cutlass::reference::host::TensorFill(

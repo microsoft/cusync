@@ -45,8 +45,8 @@
 // #define AVOID_WAIT_KERNEL
 
 // #if defined(TILESYNC) || defined(TILEBATCH)
-//#define AVOID_CUSTOM_ORDER
-//#define AVOID_WAIT_KERNEL
+// #define AVOID_CUSTOM_ORDER
+// #define AVOID_WAIT_KERNEL
 // #endif 
 
 #include<cusync/cusync.h>
@@ -73,9 +73,9 @@ const uint Opts =
   using ConsCuStage   = CuStage<OrderXYZ, RowSync, NoSync,  Opts>;
   using Sync = RowSync;
 #elif defined(TILESYNC)
-  using ProdCuStage   = CuStage<OrderXYZ, NoSync,   TileSync, Opts>;
-  using ConsCuStage   = CuStage<OrderXYZ, TileSync, NoSync,   Opts>;
-  using Sync = TileSync;
+  using ProdCuStage   = CuStage<OrderXYZ, NoSync,   TileSync<OrderXYZ>, Opts>;
+  using ConsCuStage   = CuStage<OrderXYZ, TileSync<OrderXYZ>, NoSync,   Opts>;
+  using Sync = TileSync<OrderXYZ>;
 #else
   #error "Unknown Synchronization"
 #endif
@@ -85,8 +85,8 @@ const uint GLURowTile = 8;
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
-using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<256, 256, 32>;
-using ShapeMMAWarp = cutlass::gemm::GemmShape<128, 128, 32>;
+using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;
+using ShapeMMAWarp = cutlass::gemm::GemmShape<32, 128, 32>;
 #else
 //<eval tiles>
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;  
@@ -974,7 +974,7 @@ int run(int argc, char* argv[]) {
   using Sync = TileSync<2>;
   Sync sync;
 #elif defined(TILESYNC)
-  using Sync = TileSync;
+  using Sync = TileSync<OrderXYZ>;
   Sync sync;
 #elif defined(BATCHEDROW)
   using Sync = BatchedRowSync;

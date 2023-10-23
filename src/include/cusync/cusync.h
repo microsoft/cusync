@@ -202,17 +202,16 @@ public:
   void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return;
     if (!inputPolicy_.isSync(tile, prodGrid_)) return;
+    
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
-      if (std::is_same<InputSyncPolicy, Conv2DTileSync<3,3>>::value) {
-        tile.y = tile.y/9;
-      }
       uint w = inputPolicy_.waitValue(tile, prodGrid_);
       uint idx = inputPolicy_.tileIndex(tile, prodGrid_);
       auto v = globalLoad(&tileStatusRead_[idx]);
       while(v < iter * w) {
-        // if (threadIdx.x == 0) printf("w %d tile {%d, %d, %d} v %d\n", w, tile.x, tile.y, tile.z, v);
         v = globalVolatileLoad(&tileStatusRead_[idx]);
       }
+      // printf("214: w %d tile {%d, %d, %d} idx %d v %d iter %d\n", 
+      //        w, tile.x, tile.y, tile.z, idx, v, iter);
     }
 
     if (callSync)
@@ -221,9 +220,6 @@ public:
 
   __device__ __forceinline__
   uint waitTileIndex(dim3 tile) {
-    if (std::is_same<InputSyncPolicy, Conv2DTileSync<3,3>>::value) {
-      tile.y = tile.y/9;
-    }
     return inputPolicy_.tileIndex(tile, grid_);;
   }
 
@@ -250,7 +246,7 @@ public:
                   outputPolicy_.postValue(tile, grid_));
       } else {
         uint val = outputPolicy_.postValue(tile, grid_) * iter;
-        asm volatile ("st.global.cg.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));
+        asm volatile ("st.global.release.gpu.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));
       }
     }
 

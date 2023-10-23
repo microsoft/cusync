@@ -23,9 +23,23 @@ struct OrderZYX {
  * OrderXYZ order that generates tile indices first for X-dimension, then 
  * Y-dimension, and finally Z-dimension.
  */
+
+//TODO: Change to HorizontalOrder
 struct OrderXYZ {
-  size_t operator()(const dim3& grid, const dim3& tile) {
+  __device__ __host__ __forceinline__
+  uint operator()(const dim3& grid, const dim3& tile) {
     return tile.x + tile.y * grid.x + tile.z * grid.x * grid.y;
+  }
+
+  __device__ __host__ __forceinline__
+  dim3 tileToBlock(const dim3& tile) {
+    return dim3{tile.y, tile.x, tile.z};
+  }
+
+  __device__ __host__ __forceinline__
+  uint tileIndex(const dim3& tile, const dim3& grid) {
+    dim3 block = tileToBlock(tile);
+    return this->operator()(grid, block);
   }
 };
 }

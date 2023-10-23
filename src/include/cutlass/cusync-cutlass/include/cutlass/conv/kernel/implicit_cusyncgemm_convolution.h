@@ -449,12 +449,13 @@ struct ImplicitCuSyncGemmConvolution {
     // Release the semaphore
     //
 
-    if (params.split_k_mode == SplitKMode::kSerial && params.grid_tiled_shape.k() > 1) { 
+    if (params.split_k_mode == SplitKMode::kSerial && params.grid_tiled_shape.k() > 1) {
 
       int lock = 0;
       if (params.grid_tiled_shape.k() == threadblock_tile_idx.k() + 1) {
         if (stage.isProducer()) {
-          dim3 tile = {block_idx_x, block_idx_y, block_idx_z};
+          dim3 tile = {(uint)threadblock_tile_idx.m(), (uint)threadblock_tile_idx.n(), 
+                       (uint)threadblock_tile_idx.k()};
           stage.post(tile);
         }
         // The final threadblock resets the semaphore for subsequent grids.
@@ -468,7 +469,8 @@ struct ImplicitCuSyncGemmConvolution {
       semaphore.release(lock);
     } else {
       if (stage.isProducer()) {
-        dim3 tile = {block_idx_x, block_idx_y, block_idx_z};
+        dim3 tile = {(uint)threadblock_tile_idx.m(), (uint)threadblock_tile_idx.n(), 
+                     (uint)threadblock_tile_idx.k()};
         stage.post(tile);
       }
     }

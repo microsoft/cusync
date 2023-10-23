@@ -87,6 +87,7 @@ struct RowSync {
 /*
  * TileSync assigns distinct semaphore to each tile
  */
+template<typename TileOrder>
 struct TileSync {
   uint waitValue_;
   uint postValue_;
@@ -121,14 +122,14 @@ struct TileSync {
    * Return the linear tile index for the grid
    */
   __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-    return (tile.x * grid.y + tile.y);
+    return TileOrder().tileIndex({tile.x, tile.y, 0}, grid);
   }
 
   /*
-   * Synchronizes on a tile if it is within the grid
+   * Always synchronize on a tile
    */
   __device__ __forceinline__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y < grid.y and tile.x < grid.x;
+    return true;
   }
 };
 
@@ -141,7 +142,7 @@ struct TileSync {
  * [B∗P∗Q, C∗R∗S] x [C∗R∗S, C]. Therefore, a tile {x,y} of the second Conv2D
  * synchronizes on the tile {x, y/(R*S)} of first Conv2D.
  */
-template<uint R, uint S>
+template<typename TileOrder, uint R, uint S>
 struct Conv2DTileSync {
   uint waitValue_;
   uint postValue_;
@@ -179,7 +180,7 @@ struct Conv2DTileSync {
    */
   __device__ __forceinline__
   uint tileIndex(const dim3& tile, const dim3& grid) {
-    return tile.x * grid.y + tile.y/(R*S);
+    return TileOrder().tileIndex({tile.x, tile.y/(R*S), 0}, grid);
   }
 
   /*
