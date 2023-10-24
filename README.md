@@ -13,13 +13,18 @@ Usage
 
 ### CUDA code
 Each kernel is associated with a CuStage.
-A CuStage is defined as follows:
+A CuStage requires three arguments: 
+* A processing order for this kernel's thread block and map of tiles to thread blocks. The `IdentityOrder` (in `src/include/tile-orders.h`) schedules thread blocks first in X-dim, then Y-dim, and finally Z-dim, and maps a tile {`x`, `y`, `z`} to thread block {`x`, `y`, `z`}. 
+* A policy for the input of this kernel read the status of a tile stored in a semaphore. For example, `TileSync` (in `src/include/policies.h`) is a one-to-one map of tiles to semaphores. * Similarly, a policy for the output of this kernel to write the status of a tile to a semaphore. 
+
+By setting values of above arguments we can define a CuStage as follows:
 ```
-using ProdCuStage = CuStage<CuStageType::Producer, RowMajorXYZ, TileSync>;
-using ConsCuStage = CuStage<CuStageType::Consumer, RowMajorXYZ, TileSync>;
+using Sync = TileSync<IdentityOrder, 1, 1>;
+using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync>;
+using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
 ```
-A CuStage is a producer, consumer or both. 
-Defining a CuStage also requires tile processing order and synchronization policy.
+`NoSync` policy means all tiles do not map to any semaphore. 
+A CuStage is a producer if it has a policy for its output and it is a consumer if it has a policy for its input. 
 
 All kernels takes the custage object associated with them. 
 For each tile a consumer kernel waits for input tiles to be processed and post the status of processed output tile.
