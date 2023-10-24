@@ -143,7 +143,7 @@ struct TileSync {
  * [B∗P∗Q, C∗R∗S] x [C∗R∗S, C]. Therefore, a tile {x,y} of the second Conv2D
  * synchronizes on the tile {x, y/(R*S)} of first Conv2D.
  */
-template<typename TileOrder, uint R, uint S>
+template<typename TileOrder, uint R, uint S, uint TileM, uint TileN>
 struct Conv2DTileSync {
   uint waitValue_;
   uint postValue_;
@@ -181,7 +181,7 @@ struct Conv2DTileSync {
    */
   __device__ __forceinline__
   uint tileIndex(const dim3& tile, const dim3& grid) {
-    return TileOrder().tileIndex({tile.x, tile.y/(R*S), 0}, grid);
+    return TileOrder().tileIndex({tile.x/TileM, (tile.y/TileN)/(R*S), 0}, grid);
   }
 
   /*
@@ -190,7 +190,7 @@ struct Conv2DTileSync {
    */
   __device__ __forceinline__
   bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y % (R * S) == 0;
+    return (tile.y/TileN) % (R * S) == 0;
   }
 };
 

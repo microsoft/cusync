@@ -345,7 +345,7 @@ public:
     //   printf("startK %d blockIdx.z %d\n", startK, blockIdx.z);
     // }
     if (custage.isConsumer()) {
-      dim3 tile = {(uint)tb_offset_A.row()/Shape::kM, startK/Shape::kN, 0};
+      dim3 tile = {(uint)tb_offset_A.row(), startK, 1};
       #ifdef REORDER_TILE_LOADS
       custage.wait(tile, 0, false);
       #else
@@ -462,8 +462,8 @@ public:
           // if ( threadIdx.x == 0 && blockIdx.x == 0) {
           //   printf("463: startK %d blockIdx.z %d\n", startK, blockIdx.z);
           // }
-          if (custage.isConsumer() && startK > Shape::kN && startK%Shape::kN == 0) {
-            dim3 tile = {(uint)tb_offset_A.row()/Shape::kM, startK/Shape::kN, 0};
+          if (custage.isConsumer()) {
+            dim3 tile = {(uint)tb_offset_A.row(), startK, 0};
             #ifdef REORDER_TILE_LOADS
             custage.wait(tile, 0, false);
             #else

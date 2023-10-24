@@ -454,7 +454,7 @@ struct ImplicitCuSyncGemmConvolution {
       int lock = 0;
       if (params.grid_tiled_shape.k() == threadblock_tile_idx.k() + 1) {
         if (stage.isProducer()) {
-          dim3 tile = {(uint)threadblock_tile_idx.m(), (uint)threadblock_tile_idx.n(), 
+          dim3 tile = {(uint)threadblock_offset.row(), (uint)threadblock_offset.column(), 
                        (uint)threadblock_tile_idx.k()};
           stage.post(tile);
         }
@@ -469,7 +469,7 @@ struct ImplicitCuSyncGemmConvolution {
       semaphore.release(lock);
     } else {
       if (stage.isProducer()) {
-        dim3 tile = {(uint)threadblock_tile_idx.m(), (uint)threadblock_tile_idx.n(), 
+        dim3 tile = {(uint)threadblock_offset.row(), (uint)threadblock_offset.column(), 
                      (uint)threadblock_tile_idx.k()};
         stage.post(tile);
       }

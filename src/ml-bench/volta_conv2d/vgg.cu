@@ -130,17 +130,18 @@ using WarpShape = cutlass::gemm::GemmShape<32, 32, 32>;
 //</eval tiles>
 
 #ifdef ROWSYNC 
-  using Sync = RowSync;
-  using FirstStage = CuStage<OrderXYZ, NoSync,  RowSync, Opts>;
-  using Mid1Stage  = CuStage<OrderXYZ, RowSync, RowSync, Opts>;
-  using Mid2Stage  = CuStage<OrderXYZ, RowSync, RowSync, Opts>;
-  using FinalStage = CuStage<OrderXYZ, RowSync, NoSync,  Opts>;
+  using Sync = RowSync<ThreadblockShape::kM>;
+  using FirstStage = CuStage<OrderXYZ, NoSync,  Sync, Opts>;
+  using Mid1Stage  = CuStage<OrderXYZ, Sync, Sync, Opts>;
+  using Mid2Stage  = CuStage<OrderXYZ, Sync, Sync, Opts>;
+  using FinalStage = CuStage<OrderXYZ, Sync, NoSync,  Opts>;
 #elif defined(TILESYNC)
-  using Conv2DSync = Conv2DTileSync<OrderXYZ, 3, 3>;
-  using FirstStage = CuStage<OrderXYZ, NoSync,     TileSync<OrderXYZ>, Opts>;
-  using Mid1Stage  = CuStage<OrderXYZ, Conv2DSync, TileSync<OrderXYZ>, Opts>;
-  using Mid2Stage  = CuStage<OrderXYZ, Conv2DSync, TileSync<OrderXYZ>, Opts>;
-  using FinalStage = CuStage<OrderXYZ, Conv2DSync,   NoSync, Opts>;
+  using Conv2DSync = Conv2DTileSync<OrderXYZ, 3, 3, ThreadblockShape::kM, ThreadblockShape::kN>;
+  using Sync = TileSync<OrderXYZ, ThreadblockShape::kM, ThreadblockShape::kN>;
+  using FirstStage = CuStage<OrderXYZ, NoSync,     Sync, Opts>;
+  using Mid1Stage  = CuStage<OrderXYZ, Conv2DSync, Sync, Opts>;
+  using Mid2Stage  = CuStage<OrderXYZ, Conv2DSync, Sync, Opts>;
+  using FinalStage = CuStage<OrderXYZ, Conv2DSync, NoSync, Opts>;
 #else
   #error "Unknown Synchronization"
 #endif 
@@ -942,11 +943,10 @@ Result profile_convolution(Options const &options) {
 
   
 #if defined(ROWSYNC)
-  using Sync = RowSync;
-  RowSync sync1(gridDim.n());
-  RowSync sync2(gridDim.n());
+  Sync sync1(gridDim.n());
+  Sync sync2(gridDim.n());
 #elif defined(TILESYNC)
-  TileSync<OrderXYZ> sync1;
+  Sync sync1;
   Conv2DSync sync2;
 #else
   #error "Unkown Policy"
