@@ -131,17 +131,17 @@ using WarpShape = cutlass::gemm::GemmShape<32, 32, 32>;
 
 #ifdef ROWSYNC 
   using Sync = RowSync<ThreadblockShape::kM>;
-  using FirstStage = CuStage<OrderXYZ, NoSync,  Sync, Opts>;
-  using Mid1Stage  = CuStage<OrderXYZ, Sync, Sync, Opts>;
-  using Mid2Stage  = CuStage<OrderXYZ, Sync, Sync, Opts>;
-  using FinalStage = CuStage<OrderXYZ, Sync, NoSync,  Opts>;
+  using FirstStage = CuStage<TransposeXYOrder, NoSync,  Sync, Opts>;
+  using Mid1Stage  = CuStage<TransposeXYOrder, Sync, Sync, Opts>;
+  using Mid2Stage  = CuStage<TransposeXYOrder, Sync, Sync, Opts>;
+  using FinalStage = CuStage<TransposeXYOrder, Sync, NoSync,  Opts>;
 #elif defined(TILESYNC)
-  using Conv2DSync = Conv2DTileSync<OrderXYZ, 3, 3, ThreadblockShape::kM, ThreadblockShape::kN>;
-  using Sync = TileSync<OrderXYZ, ThreadblockShape::kM, ThreadblockShape::kN>;
-  using FirstStage = CuStage<OrderXYZ, NoSync,     Sync, Opts>;
-  using Mid1Stage  = CuStage<OrderXYZ, Conv2DSync, Sync, Opts>;
-  using Mid2Stage  = CuStage<OrderXYZ, Conv2DSync, Sync, Opts>;
-  using FinalStage = CuStage<OrderXYZ, Conv2DSync, NoSync, Opts>;
+  using Conv2DSync = Conv2DTileSync<TransposeXYOrder, 3, 3, ThreadblockShape::kM, ThreadblockShape::kN>;
+  using Sync = TileSync<TransposeXYOrder, ThreadblockShape::kM, ThreadblockShape::kN>;
+  using FirstStage = CuStage<TransposeXYOrder, NoSync,     Sync, Opts>;
+  using Mid1Stage  = CuStage<TransposeXYOrder, Conv2DSync, Sync, Opts>;
+  using Mid2Stage  = CuStage<TransposeXYOrder, Conv2DSync, Sync, Opts>;
+  using FinalStage = CuStage<TransposeXYOrder, Conv2DSync, NoSync, Opts>;
 #else
   #error "Unknown Synchronization"
 #endif 

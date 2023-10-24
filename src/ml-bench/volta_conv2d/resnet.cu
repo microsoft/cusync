@@ -102,12 +102,12 @@ const uint Opts =
   Optimizations::NoOptimization;
 
 #ifdef ROWSYNC
-  using ProdCuStage = CuStage<OrderXYZ, NoSync, RowSync<ThreadblockShape::kM>, Opts>;
-  using ConsCuStage = CuStage<OrderXYZ, RowSync<ThreadblockShape::kM>, NoSync, Opts>;
+  using ProdCuStage = CuStage<TransposeXYOrder, NoSync, RowSync<ThreadblockShape::kM>, Opts>;
+  using ConsCuStage = CuStage<TransposeXYOrder, RowSync<ThreadblockShape::kM>, NoSync, Opts>;
 #elif defined(TILESYNC)
-  using Conv2DSync = Conv2DTileSync<OrderXYZ,3,3,ThreadblockShape::kM,ThreadblockShape::kN>;
-  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync<OrderXYZ,ThreadblockShape::kM,ThreadblockShape::kN>, Opts>;
-  using ConsCuStage = CuStage<OrderXYZ, Conv2DSync, NoSync, Opts>;
+  using Conv2DSync = Conv2DTileSync<TransposeXYOrder,3,3,ThreadblockShape::kM,ThreadblockShape::kN>;
+  using ProdCuStage = CuStage<TransposeXYOrder, NoSync, TileSync<TransposeXYOrder,ThreadblockShape::kM,ThreadblockShape::kN>, Opts>;
+  using ConsCuStage = CuStage<TransposeXYOrder, Conv2DSync, NoSync, Opts>;
 #else
   #error "Unknown Synchronization"
 #endif
@@ -767,7 +767,7 @@ Result profile_convolution(Options const &options) {
   RowSync<ThreadblockShape::kM> sync1(gridDim.n());
   RowSync<ThreadblockShape::kM> sync2(gridDim.n());
 #elif defined(TILESYNC)
-  TileSync<OrderXYZ, ThreadblockShape::kM, ThreadblockShape::kN> sync1;
+  TileSync<TransposeXYOrder, ThreadblockShape::kM, ThreadblockShape::kN> sync1;
   Conv2DSync sync2;
 #else
   #error "Unkown Policy"

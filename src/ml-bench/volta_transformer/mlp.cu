@@ -85,13 +85,13 @@ using ShapeMMAWarp = cutlass::gemm::GemmShape<32, 64, 32>;
 #endif
 
 #ifdef ROWSYNC
-  using ProdCuStage   = CuStage<OrderXYZ, NoSync,  RowSync<ShapeThreadBlock1::kM>, Opts>;
-  using ConsCuStage   = CuStage<OrderXYZ, RowSync<ShapeThreadBlock1::kM>, NoSync,  Opts>;
+  using ProdCuStage   = CuStage<TransposeXYOrder, NoSync,  RowSync<ShapeThreadBlock1::kM>, Opts>;
+  using ConsCuStage   = CuStage<TransposeXYOrder, RowSync<ShapeThreadBlock1::kM>, NoSync,  Opts>;
   using Sync = RowSync<ShapeThreadBlock1::kM>;
 #elif defined(TILESYNC)
-  using Sync = TileSync<OrderXYZ, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
-  using ProdCuStage   = CuStage<OrderXYZ, NoSync, Sync, Opts>;
-  using ConsCuStage   = CuStage<OrderXYZ, Sync,   NoSync,   Opts>;
+  using Sync = TileSync<TransposeXYOrder, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
+  using ProdCuStage   = CuStage<TransposeXYOrder, NoSync, Sync, Opts>;
+  using ConsCuStage   = CuStage<TransposeXYOrder, Sync,   NoSync,   Opts>;
 #else
   #error "Unknown Synchronization"
 #endif
@@ -979,7 +979,7 @@ int run(int argc, char* argv[]) {
   using Sync = TileSync<2>;
   Sync sync;
 #elif defined(TILESYNC)
-  using Sync = TileSync<OrderXYZ, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
+  using Sync = TileSync<TransposeXYOrder, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
   Sync sync;
 #elif defined(BATCHEDROW)
   using Sync = BatchedRowSync;
