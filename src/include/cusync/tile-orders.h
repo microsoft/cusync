@@ -53,4 +53,26 @@ struct OrderXYZ {
     return this->operator()(grid, block);
   }
 };
+
+/*
+ * IdentityOrder generates maps tile{x,y,z} to threadblock{x,y,z} and 
+ * orders tile indices first for X-dimension, then Y-dim, and finally Z-dim. 
+ */
+struct IdentityOrder {
+  __device__ __host__ __forceinline__
+  uint operator()(const dim3& grid, const dim3& tile) {
+    return tile.x + tile.y * grid.x + tile.z * grid.x * grid.y;
+  }
+
+  __device__ __host__ __forceinline__
+  dim3 tileToBlock(const dim3& tile) {
+    return dim3{tile.x, tile.y, tile.z};
+  }
+
+  __device__ __host__ __forceinline__
+  uint tileIndex(const dim3& tile, const dim3& grid) {
+    dim3 block = tileToBlock(tile);
+    return this->operator()(grid, block);
+  }
+};
 }

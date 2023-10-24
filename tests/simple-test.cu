@@ -105,31 +105,35 @@ bool run(int iters) {
 }
 
 TEST(SimpleTest_TileSync, NoOpts) {
-  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync>;
-  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
-  bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
+  using Sync = TileSync<IdentityOrder, 1, 1>;
+  using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync>;
+  using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
+  bool result = run<Sync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync_MultiIters, NoOpts) {
-  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync>;
-  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
-  bool result = run<TileSync, ProdCuStage, ConsCuStage>(2);
+  using Sync = TileSync<IdentityOrder, 1, 1>;
+  using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync>;
+  using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
+  bool result = run<Sync, ProdCuStage, ConsCuStage>(2);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, NoAtomicAdd) {
-  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync, Optimizations::NoAtomicAdd>;
-  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
+  using Sync = TileSync<IdentityOrder, 1, 1>;
+  using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync, Optimizations::NoAtomicAdd>;
+  using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
   
-  bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
+  bool result = run<Sync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }
 
 TEST(SimpleTest_TileSync, AvoidCustomOrder) {
-  using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync, Optimizations::AvoidCustomOrder>;
-  using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
+  using Sync = TileSync<IdentityOrder, 1, 1>;
+  using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync, Optimizations::AvoidCustomOrder>;
+  using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
   
-  bool result = run<TileSync, ProdCuStage, ConsCuStage>(1);
+  bool result = run<Sync, ProdCuStage, ConsCuStage>(1);
   EXPECT_TRUE(result);
 }

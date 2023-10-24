@@ -44,11 +44,13 @@
 
 using namespace cusync;
 
-//Define Producer and Consuer CuStage
-using ProdCuStage = CuStage<OrderXYZ, NoSync, TileSync>;
-using ConsCuStage = CuStage<OrderXYZ, TileSync, NoSync>;
+//Define Producer and Consumer CuStage
+const int BLOCK_SIZE = 32;
+using Sync = TileSync<IdentityOrder, BLOCK_SIZE, BLOCK_SIZE>;
+using ProdCuStage = CuStage<OrderXYZ, NoSync, Sync>;
+using ConsCuStage = CuStage<OrderXYZ, Sync, NoSync>;
 
-template <typename CuStageTy, int BLOCK_SIZE>
+template <typename CuStageTy>
 __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
                               float *B, int wA, int wB) {
   __shared__ int tileSh[3];
@@ -207,7 +209,7 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   dim3 grid(dimsB.x / threads.x, dimsA.y / threads.y, 1);
   
   // Create CuSync and CuStage
-  TileSync sync;
+  Sync sync;
   dim3 tilesize = threads;
   ProdCuStage prod(grid, tilesize, NoSync(), sync);
   ConsCuStage cons(grid, tilesize, sync, NoSync());
@@ -218,7 +220,7 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
 
   assert (block_size == 32);
   // Invoke producer kernel (C = A * B)
-  MatrixMulCUDA<ProdCuStage, 32>
+  MatrixMulCUDA<ProdCuStage>
         <<<grid, threads, 0, prod_stream>>>(prod, d_C, d_A, d_B, dimsA.x, dimsB.x);
 
   //Invoke wait kernel
@@ -226,7 +228,7 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   // //Invoke consumer kernel (E = C * D)
   // CUDA_CHECK(cudaDeviceSynchronize());
 
-  MatrixMulCUDA<ConsCuStage, 32>
+  MatrixMulCUDA<ConsCuStage>
         <<<grid, threads, 0, cons_stream>>>(cons, d_E, d_C, d_D, dimsA.x, dimsB.x);
   
   CUDA_CHECK(cudaDeviceSynchronize());
@@ -312,7 +314,7 @@ int main(int argc, char **argv) {
   // This will pick the best possible CUDA capable device, otherwise
   // override the device ID based on input provided at the command line
 
-  int block_size = 32;
+  int block_size = BLOCK_SIZE;
 
   dim3 dimsA(4 * 2 * block_size, 4 * 2 * block_size, 1);
   dim3 dimsB = dimsA;
