@@ -27,10 +27,20 @@ namespace cusync {
 class CuSyncTest;
 class CuSync;
 
+/* 
+ * List of CuSync errors.
+ * CuSyncErrorNotProducer            : Operation is performed on a CuStage which is not a producer 
+ * CuSyncErrorNotConsumer            : Operation is performed on a CuStage which is not a producer
+ * CuSyncErrorNotInitialized         : CuStage is not initialized
+ * CuSyncErrorInvalidLinearBlockIndex: TileOrder do not cover all thread blocks to a linear index
+ * CuSyncErrorCUDAError              : Internal CUDA Error, use cudaGetLastError()
+ * CuSyncSuccess                     : Operation sucess
+ */
 enum CuSyncError {
-  CuSyncErrorNotProducer,
+  CuSyncErrorNotProducer, 
   CuSyncErrorNotConsumer,
   CuSyncErrorNotInitialized,
+  CuSyncErrorInvalidLinearBlockIndex,
   CuSyncErrorCUDAError,
   CuSyncSuccess
 };
@@ -62,7 +72,7 @@ enum Optimizations {
  * information about its kernel:
  * 1. grid and tile size of the kernel
  * 2. grid size of its producer kernel
- * 3. synchronization policy for the kernel
+ * 3. input and output synchronization policies for the kernel
  * 
  * Moreover, CuStage contains pointers to the tile order and array of semaphore 
  * for tile synchronization policies. 
@@ -117,25 +127,46 @@ private:
 
   //Call TileOrder parameter to generate tile order and store 
   //it in tileOrder
-  void buildScheduleBuffer() {
+  CuSyncError buildScheduleBuffer() {
     dim3* hTileOrder = new dim3[numTiles()];
+    bool errInvalidLinearBlockIndex = false;
 
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));
     CUDA_CHECK(cudaMemset(tileCounter, 0, sizeof(int)));
     CUDA_CHECK(cudaMalloc(&tileOrder, sizeof(*tileOrder) * numTiles()));
+    
+    dim3 invalidBlock = {numTiles(), 0, 0};
+    for (uint id = 0; id < numTiles(); id++) {
+      hTileOrder[id] = invalidBlock;
+    }
 
     for (uint z = 0; z < grid_.z; z++) {
     for (uint y = 0; y < grid_.y; y++) {
     for (uint x = 0; x < grid_.x; x++) {
-      size_t id = TileOrder()(grid_, {x, y, z});
-      hTileOrder[id] = {x, y, z};
+      size_t id = TileOrder().blockIndex(grid_, {x, y, z});
+      if (hTileOrder[id].x == invalidBlock.x) {
+        hTileOrder[id] = {x, y, z};
+      } else {
+        errInvalidLinearBlockIndex = true; 
+      }
     }}}
 
     CUDA_CHECK(cudaMemcpy(tileOrder, hTileOrder, 
                           sizeof(*tileOrder) * numTiles(),
                           cudaMemcpyHostToDevice));
     delete[] hTileOrder;
+
+    if (errInvalidLinearBlockIndex) return CuSyncErrorInvalidLinearBlockIndex;
+
+    return CuSyncSuccess;
   }
+
+  //Set the producer grid
+  template<typename ProdCuStage>
+  __host__
+  void setProdGrid(ProdCuStage& prod) {prodGrid_ = prod.grid();}
+
+  
 public:
   __device__ __host__ 
   CuStage(): iter(1) {}
@@ -189,18 +220,42 @@ public:
   //Return grid size of this stage
   dim3 grid() {return grid_;}
 
-  //Set producer grid
-  template<typename ProdCuStage>
-  __host__
-  void setProdGrid(ProdCuStage& prod) {prodGrid_ = prod.grid();}
-
-  //Get total number of tiles
+  /* 
+   * Returns total number of thread blocks
+   */
   __device__ __host__
-  size_t numTiles() {return grid_.x *grid_.y*grid_.z;}
+  uint numTiles() {return grid_.x *grid_.y*grid_.z;}
 
+  /*
+   * Returns the tile index of tile using the input policy
+   */
   __device__ __forceinline__
-  void wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
-    if (!isConsumer()) return;
+  uint waitTileIndex(dim3 tile) {
+    return inputPolicy_.tileIndex(tile, prodGrid_);;
+  }
+
+  /*
+   * Return semaphore value for the tile index
+   */
+  __device__ __forceinline__
+  uint waitSemValue(dim3 tile) {
+    return globalVolatileLoad(&tileStatusRead_[waitTileIndex(tile)]);
+  }
+
+  /*
+   * Return expected wait value for the tile
+   */
+  __device__ __forceinline__
+  uint expectedWaitValue(dim3 tile) {
+    return inputPolicy_.waitValue(tile, prodGrid_);
+  }
+
+  /*
+   * Wait until the semaphore of the tile reaches the wait value
+   */
+  __device__ __forceinline__
+  CuSyncError wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
+    if (!isConsumer()) return CuSyncErrorNotConsumer;
     if (!inputPolicy_.isSync(tile, prodGrid_)) return;
     
     if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
@@ -214,28 +269,17 @@ public:
 
     if (callSync)
       __syncthreads();
+    
+    return CuSyncSuccess;
   }
 
+  /*
+   * Post the status of completion of tile.
+  */
   __device__ __forceinline__
-  uint waitTileIndex(dim3 tile) {
-    return inputPolicy_.tileIndex(tile, grid_);;
-  }
-
-  __device__ __forceinline__
-  uint waitSemValue(uint tileIndex) {
-    return globalVolatileLoad(&tileStatusRead_[tileIndex]);
-  }
-
-  __device__ __forceinline__
-  uint expectedWaitValue(dim3 tile) {
-    return inputPolicy_.waitValue(tile, prodGrid_);
-  }
-
-  __device__ __forceinline__
-  void post(const dim3& tile, uint postThread = 0) {
-    if (!isProducer()) return;
+  CuSyncError post(const dim3& tile, uint postThread = 0) {
+    if (!isProducer()) return CuSyncErrorNotProducer;
     __syncthreads();
-    // printf("407\n");
     if (threadIdx.x == postThread && threadIdx.y == 0 && threadIdx.z == 0) {
       __threadfence_system();
       uint idx = outputPolicy_.tileIndex(tile, grid_);
@@ -249,8 +293,12 @@ public:
     }
 
     __syncwarp();
+    return CuSyncSuccess;
   }
 
+  /*
+   * Returns the next tile process and set the waitkernel's semaphore if valid
+   */  
   __device__ __forceinline__
   dim3 tile(dim3* shared_storage) {
     if (!getAvoidWaitKernel()) {

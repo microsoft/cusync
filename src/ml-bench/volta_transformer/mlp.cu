@@ -76,7 +76,7 @@ using ShapeThreadBlock1 = cutlass::gemm::GemmShape<32, 256, 32>;
 using ShapeWarp1 = cutlass::gemm::GemmShape<32, 64, 32>;
 
 using ShapeThreadBlock2 = cutlass::gemm::GemmShape<32, 128, 32>;
-using ShapeWarp2 = cutlass::gemm::GemmShape<32, 32, 32>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<32, 64, 32>;
 #else
 //<eval tiles>
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;  
@@ -90,8 +90,8 @@ using ShapeMMAWarp = cutlass::gemm::GemmShape<32, 64, 32>;
   using Sync = RowSync<ShapeThreadBlock1::kM>;
 #elif defined(TILESYNC)
   using Sync = TileSync<TransposeXYOrder, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
-  using ProdCuStage   = CuStage<TransposeXYOrder, NoSync, Sync, Opts>;
-  using ConsCuStage   = CuStage<TransposeXYOrder, Sync,   NoSync,   Opts>;
+  using ProdCuStage   = CuStage<TransposeXYOrder, NoSync, Sync,   Opts>;
+  using ConsCuStage   = CuStage<TransposeXYOrder, Sync,   NoSync, Opts>;
 #else
   #error "Unknown Synchronization"
 #endif
@@ -897,7 +897,7 @@ int run(int argc, char* argv[]) {
   
   cudaError_t result;
   int epochs = 20;
-  int warmup = 10;
+  int warmup = 5;
 
   if (doChecking) {
     //Run our reference MLP
@@ -979,7 +979,6 @@ int run(int argc, char* argv[]) {
   using Sync = TileSync<2>;
   Sync sync;
 #elif defined(TILESYNC)
-  using Sync = TileSync<TransposeXYOrder, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
   Sync sync;
 #elif defined(BATCHEDROW)
   using Sync = BatchedRowSync;

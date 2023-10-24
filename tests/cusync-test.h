@@ -21,8 +21,7 @@ public:
   void setSemValue(uint stageIdx, dim3 tile, CuStage& custage) {
     if (!custage.isConsumer()) return;
     if (threadIdx.x == 0) {
-      const uint index = custage.waitTileIndex(tile);
-      char eq = (char)((custage.expectedWaitValue(tile)* custage.iter) == custage.waitSemValue(index));
+      char eq = (char)((custage.expectedWaitValue(tile)* custage.iter) == custage.waitSemValue(tile));
       semValidArray[stageIdx] = (bool) eq && ((bool) semValidArray[stageIdx]);
     }
   }

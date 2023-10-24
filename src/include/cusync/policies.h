@@ -2,7 +2,7 @@
 
 namespace cusync {
 /*
- * A synchronization policy (SyncPolicy) is a struct of four functions:
+ * A synchronization policy (SyncPolicy) is a struct of four method:
  * uint waitValue(const dim3& tile, const dim3& grid) returns completed value for the tile
  * uint tileIndex(const dim3& tile, const dim3& grid) returns semaphore index for the tile
  * uint isSync   (const dim3& tile, const dim3& grid) returns if semaphore should be sync for the tile
@@ -10,7 +10,7 @@ namespace cusync {
  */
 
 /*
- * No Synchronization 
+ * No Synchronization Policy. A CuStage will not call any methods of this policy.
  */
 struct NoSync {
   __device__ __host__
@@ -140,8 +140,8 @@ struct TileSync {
  * 
  * The implict GeMM algorithm converts a Conv2D of B input images of size [P, Q, C] 
  * with a kernel matrix of size [R, S] into a GeMM of matrices 
- * [B∗P∗Q, C∗R∗S] x [C∗R∗S, C]. Therefore, a tile {x,y} of the second Conv2D
- * synchronizes on the tile {x, y/(R*S)} of first Conv2D.
+ * [B∗P∗Q, C∗R∗S] x [C∗R∗S, C]. Therefore, a tile {x,y} of the consumer Conv2D
+ * synchronizes on the tile {x, y/(R*S)} of its producer Conv2D.
  */
 template<typename TileOrder, uint R, uint S, uint TileM, uint TileN>
 struct Conv2DTileSync {
@@ -195,7 +195,7 @@ struct Conv2DTileSync {
 };
 
 /*
- * Other sync policies
+ * Other experimental sync policies
  */
 #define BatchedRows 2
 
