@@ -76,7 +76,7 @@ struct TileSizeAttention {
 };
 
 
-template<uint H, uint Tile, uint stride>
+template<typename TileOrder, uint H, uint TileM, uint TileN>
 struct StridedSync {
   uint waitValue_;
   uint postValue_;
@@ -94,11 +94,12 @@ struct StridedSync {
     {return 1;}
 
   __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-    return tile.x * (grid.x/((H/8)/Tile)) + tile.y/((H/8)/Tile);
+    return TileOrder().tileIndex({tile.x/TileM, tile.y/((H/8)/TileN), 0},
+                                 {(grid.x/((H/8)/TileN)), grid.y, grid.z});
   }
 
   __device__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.y == 0;
+    return tile.z == 0;
   }
 };
 
@@ -124,27 +125,31 @@ const uint Opts =
 #ifdef ROWSYNC 
   using Sync1 = RowSync<TileSizeLinearLayers::ShapeThreadBlock::kM>;
   using Sync2 = RowSync<TileSizeAttention::ShapeThreadBlock::kM>;
-  using XQKVCuStage = CuStage<TransposeXYOrder, NoSync,  Sync1, Opts>;
-  using SCuStage    = CuStage<TransposeXYOrder, Sync1, Sync2, Opts | Optimizations::AvoidCustomOrder>;
-  using OCuStage    = CuStage<TransposeXYOrder, Sync2, Sync2, Opts | Optimizations::AvoidCustomOrder>;
-  using XW12CuStage = CuStage<TransposeXYOrder, Sync1, NoSync,  Opts>;
+  using XQKVCuStage = CuStage<TransposeXYOrder, NoSync, Sync1,  Opts>;
+  using SCuStage    = CuStage<TransposeXYOrder, Sync1,  Sync2,  Opts | Optimizations::AvoidCustomOrder>;
+  using OCuStage    = CuStage<TransposeXYOrder, Sync2,  Sync1,  Opts | Optimizations::AvoidCustomOrder>;
+  using XW12CuStage = CuStage<TransposeXYOrder, Sync1,  NoSync, Opts>;
 #elif defined(TILESYNC)
-  using XQKVCuStage = CuStage<CuStageType::Producer, RowMajorZYX__1, NoSync, TileSync, Opts>;
-  using SCuStage = CuStage<CuStageType::Consumer | CuStageType::Producer, RowMajorZYX__1, TileSync, TileSync, Opts>;
-  using OCuStage = CuStage<CuStageType::Consumer | CuStageType::Producer, RowMajorZYX__1, TileSync, TileSync, Opts>;
-  using XW12CuStage = CuStage<CuStageType::Consumer, RowMajorZYX__1, TileSync, NoSync, Opts>;
+  using Sync1 = TileSync<TransposeXYOrder, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN>;
+  using Sync2 = TileSync<TransposeXYOrder, TileSizeAttention::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN>;
+  using XQKVCuStage = CuStage<TransposeXYOrder, NoSync, Sync1, Opts>;
+  using SCuStage    = CuStage<TransposeXYOrder, Sync2, Sync2,  Opts>;
+  using OCuStage    = CuStage<TransposeXYOrder, Sync2, Sync1,  Opts>;
+  using XW12CuStage = CuStage<TransposeXYOrder, Sync1, NoSync, Opts>;
 #elif defined(STRIDEDSYNC)
   #if defined(GPT3)
-    using StridedSyncImpl = StridedSync<12288, TileSizeLinearLayers::ShapeThreadBlock::kN, 3>;
+    using StridedSyncImpl = StridedSync<TransposeXYOrder, 12288, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN, 3>;
   #elif defined(LLaMA)
-    using StridedSyncImpl = StridedSync<8192, TileSizeLinearLayers::ShapeThreadBlock::kN, 3>;
+    using StridedSyncImpl = StridedSync<TransposeXYOrder,  8192, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN, 3>;
   #else
     #error "GPT3 or LLaMA"
   #endif
-  using XQKVCuStage = CuStage<CuStageType::Producer, RowMajorZYX__1, NoSync, StridedSyncImpl, Opts>;
-  using SCuStage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajorZYX__1, StridedSyncImpl, RowSync, Opts | Optimizations::AvoidCustomOrder>;
-  using OCuStage = CuStage<CuStageType::Producer|CuStageType::Consumer, RowMajorZYX__1, RowSync, RowSync, Opts | Optimizations::AvoidCustomOrder>;
-  using XW12CuStage = CuStage<CuStageType::Consumer, RowMajorZYX__1, RowSync, NoSync, Opts>;
+  using Sync1 = RowSync<TileSizeLinearLayers::ShapeThreadBlock::kM>;
+  using Sync2 = RowSync<TileSizeAttention::ShapeThreadBlock::kM>;
+  using XQKVCuStage = CuStage<TransposeXYOrder, NoSync, StridedSyncImpl, Opts>;
+  using SCuStage    = CuStage<TransposeXYOrder, StridedSyncImpl, Sync2, Opts | Optimizations::AvoidCustomOrder>;
+  using OCuStage    = CuStage<TransposeXYOrder, Sync2, Sync1, Opts | Optimizations::AvoidCustomOrder>;
+  using XW12CuStage = CuStage<TransposeXYOrder, Sync1, NoSync, Opts>;
 #else
   #error "Unknown Synchronization"
 #endif 
@@ -1053,10 +1058,11 @@ int run(int argc, char* argv[]) {
 #ifdef ROWSYNC
   Sync1 sync1(gridDim1.n());
   Sync2 sync2(gridDim2.n());
-  Sync2 sync3(gridDim3.n());
-  Sync1 sync4(gridDim4.n());
+  Sync1 sync3(gridDim3.n());
 #elif defined(TILESYNC)
-  TileSync sync1(1,1), sync2(1,1), sync3(1,1), sync4(1,1);
+  Sync1 sync1(1,1);
+  Sync2 sync2(1,1);
+  Sync1 sync3(1,1);
 #elif defined(STRIDEDSYNC)
   StridedSyncImpl sync1(gridDim1.x/3);
   RowSync sync2(gridDim2.x);
