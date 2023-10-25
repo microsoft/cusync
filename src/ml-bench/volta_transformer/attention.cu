@@ -123,8 +123,8 @@ const uint Opts =
   Optimizations::NoOptimization;
 
 #ifdef ROWSYNC 
-  using Sync1 = RowSync<TileSizeLinearLayers::ShapeThreadBlock::kM>;
-  using Sync2 = RowSync<TileSizeAttention::ShapeThreadBlock::kM>;
+  using Sync1       = RowSync<TileSizeLinearLayers::ShapeThreadBlock::kM>;
+  using Sync2       = RowSync<TileSizeAttention   ::ShapeThreadBlock::kM>;
   using XQKVCuStage = CuStage<TransposeXYOrder, NoSync, Sync1,  Opts>;
   using SCuStage    = CuStage<TransposeXYOrder, Sync1,  Sync2,  Opts | Optimizations::AvoidCustomOrder>;
   using OCuStage    = CuStage<TransposeXYOrder, Sync2,  Sync1,  Opts | Optimizations::AvoidCustomOrder>;
@@ -1051,8 +1051,8 @@ int run(int argc, char* argv[]) {
 
 
   cutlass::gemm::GemmCoord gridDim1 = CuSyncGeMMSwizzle().get_tiled_shape(attnParams.gemm_size_xqkv, tileSizeCoord1, split_k1);
-  cutlass::gemm::GemmCoord gridDim2 = CuSyncGeMMSwizzle().get_tiled_shape(attnParams.gemm_size_s, tileSizeCoord2, split_k2);
-  cutlass::gemm::GemmCoord gridDim3 = CuSyncGeMMSwizzle().get_tiled_shape(attnParams.gemm_size_o, tileSizeCoord2, split_k3);
+  cutlass::gemm::GemmCoord gridDim2 = CuSyncGeMMSwizzle().get_tiled_shape(attnParams.gemm_size_s,    tileSizeCoord2, split_k2);
+  cutlass::gemm::GemmCoord gridDim3 = CuSyncGeMMSwizzle().get_tiled_shape(attnParams.gemm_size_o,    tileSizeCoord2, split_k3);
   cutlass::gemm::GemmCoord gridDim4 = CuSyncGeMMSwizzle().get_tiled_shape(attnParams.gemm_size_xw12, tileSizeCoord1, split_k4);
 
 #ifdef ROWSYNC
@@ -1072,9 +1072,9 @@ int run(int argc, char* argv[]) {
 #endif
   
   XQKVCuStage xqkvStage(CuSyncGeMMSwizzle().get_grid_shape(gridDim1), {1,1,1}, NoSync(), sync1);
-  SCuStage    sStage   (CuSyncGeMMSwizzle().get_grid_shape(gridDim2), {1,1,1}, sync1, sync2);
-  OCuStage    oStage   (CuSyncGeMMSwizzle().get_grid_shape(gridDim3), {1,1,1}, sync2, sync3);
-  XW12CuStage xw12Stage(CuSyncGeMMSwizzle().get_grid_shape(gridDim4), {1,1,1}, sync3, NoSync());
+  SCuStage    sStage   (CuSyncGeMMSwizzle().get_grid_shape(gridDim2), {1,1,1}, sync1,    sync2);
+  OCuStage    oStage   (CuSyncGeMMSwizzle().get_grid_shape(gridDim3), {1,1,1}, sync2,    sync3);
+  XW12CuStage xw12Stage(CuSyncGeMMSwizzle().get_grid_shape(gridDim4), {1,1,1}, sync3,    NoSync());
   
   CuSync::setProducerConsumerPair(xqkvStage, sStage);
   CuSync::setProducerConsumerPair(sStage, oStage);

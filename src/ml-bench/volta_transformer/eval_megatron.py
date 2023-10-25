@@ -170,15 +170,15 @@ if model == "gpt3" and attention_or_mlp == "attention":
   tiles = {
     0: {
       2048: {
-        "TileSizes" : [[256, 128, 32, 128, 64, 32]],
-        "baseline": {"split_ks": [1,2,1,1], "SoftmaxRowTile" : 1},
-        "tilesync": {"split_ks": [1,2,1,1], "SoftmaxRowTile" : 1,
+        "TileSizes" : [[256, 256, 32, 128, 128, 32]],
+        "baseline": {"split_ks": [1,1,1,1], "SoftmaxRowTile" : 1},
+        "tilesync": {"split_ks": [1,1,1,1], "SoftmaxRowTile" : 1,
         "AvoidCustomOrder": False,
         "AvoidWaitKernel": False,
         "ReorderTileLoads": True},
-        "rowsync": {"split_ks": [1,2,1,1], "SoftmaxRowTile" : 1}
+        "rowsync": {"split_ks": [1,1,1,1], "SoftmaxRowTile" : 1}
       },
-      1024: {"TileSizes" : [[256, 128, 32, 128, 64, 32]],
+      1024: {"TileSizes" : [[256, 256, 32, 128, 128, 32]],
         "baseline": {"split_ks": [2,2,1,1], "SoftmaxRowTile" : 4},
         "tilesync": {"split_ks": [2,1,1,1], "SoftmaxRowTile" : 1,
         "AvoidCustomOrder": False,
@@ -186,7 +186,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
         "ReorderTileLoads": True},
         "rowsync": {"split_ks": [2,1,1,1], "SoftmaxRowTile" : 1}
       },
-      512: {"TileSizes" : [[256, 128, 32, 128, 64, 32]],
+      512: {"TileSizes" : [[256, 256, 32, 128, 128, 32]],
         "baseline": {"split_ks": [4,2,1,1], "SoftmaxRowTile" : 1},
         "tilesync": {"split_ks": [4,2,1,1], "SoftmaxRowTile" : 1,
         "AvoidCustomOrder": False,
