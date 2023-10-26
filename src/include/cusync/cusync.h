@@ -336,7 +336,7 @@ public:
       waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
     }
     
-    if (cudaGetLastError() == cudaSuccess) return CuSyncErrorCUDAError;
+    if (cudaGetLastError() != cudaSuccess) return CuSyncErrorCUDAError;
     return CuSyncSuccess;
   }
 
