@@ -170,7 +170,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
   tiles = {
     0: {
       2048: {
-        "TileSizes" : [[256, 256, 32, 128, 64, 32]],
+        "TileSizes" : [[256, 256, 32, 128, 64, 32], [128, 128, 32, 64, 32, 32]],
         "baseline": {"split_ks": [1,1,1,1], "SoftmaxRowTile" : 1},
         "tilesync": {"split_ks": [1,1,1,1], "SoftmaxRowTile" : 1,
         "AvoidCustomOrder": False,
@@ -178,7 +178,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
         "ReorderTileLoads": True},
         "rowsync": {"split_ks": [1,1,1,1], "SoftmaxRowTile" : 1}
       },
-      1024: {"TileSizes" : [[256, 256, 32, 128, 64, 32]],
+      1024: {"TileSizes" : [[256, 256, 32, 128, 64, 32], [256, 256, 32, 128, 64, 32]],
         "baseline": {"split_ks": [4,2,1,1], "SoftmaxRowTile" : 4},
         "tilesync": {"split_ks": [4,2,1,1], "SoftmaxRowTile" : 1,
         "AvoidCustomOrder": False,
@@ -194,7 +194,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
         "ReorderTileLoads": True},
         "rowsync": {"split_ks": [4,4,1,1], "SoftmaxRowTile" : 1}
       },
-      256: {"TileSizes" : [[128, 128, 32, 64, 64, 32]],
+      256: {"TileSizes" : [[128, 128, 32, 64, 64, 32], [128, 128, 32, 64, 64, 32]],
         "baseline": {"split_ks": [4,2,1,1], "SoftmaxRowTile" : 1},
         "tilesync": {"split_ks": [4,2,1,1], "SoftmaxRowTile" : 4,
         "AvoidCustomOrder": False,
@@ -286,7 +286,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
       }
     },
     1024: {
-        1: {"TileSizes" : [[32, 128, 32, 32, 32, 32]],
+        1: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
             "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
             "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
             "AvoidCustomOrder": True,
@@ -296,7 +296,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
             "AvoidCustomOrder": True,
             "AvoidWaitKernel": True},
         },
-        4: {"TileSizes" : [[32, 128, 32, 32, 32, 32]],
+        4: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
             "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
             "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
             "AvoidCustomOrder": True,
@@ -308,7 +308,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
         },
     },
     2048: {
-        1: {"TileSizes" : [[32, 128, 32, 32, 32, 32]],
+        1: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
             "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
             "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
             "AvoidCustomOrder": True,
@@ -318,7 +318,7 @@ if model == "gpt3" and attention_or_mlp == "attention":
             "AvoidCustomOrder": True,
             "AvoidWaitKernel": True},
         },
-        4: {"TileSizes" : [[32, 128, 32, 32, 32, 32]],
+        4: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
             "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
             "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
             "AvoidCustomOrder": True,
@@ -701,7 +701,7 @@ else:
   print ("No Hidden dim for ", model)
   sys.exit(0)
 
-policies = ['rowsync', 'tilesync'] #,'stridedsync'
+policies = ['rowsync', 'tilesync', 'stridedsync']
 if 'stridedsync' in policies and attention_or_mlp == 'mlp':
   policies.pop(policies.index('stridedsync'))
 
@@ -816,7 +816,12 @@ for case in cases:
   for syncPolicy in policies:
     splitKs = caseTiles["tilesync"] if syncPolicy == "stridedsync" else caseTiles[syncPolicy]
     splitKArgs = " " + " ".join([f"--split-k{i+1} {split_ks[i]}" for i in range(len(split_ks))])
-    command = buildDir(f"{attention_or_mlp}-eval-{syncPolicy}") + commandArgs + splitKArgs
+    command = ""
+    # if attention_or_mlp == 'attention' and syncPolicy == 'stridedsync':
+    #   command += buildDir("%s-%s-eval-%s "%(attention_or_mlp, model, syncPolicy))
+    # else:
+    command += buildDir("%s-eval-%s "%(attention_or_mlp, syncPolicy))
+    command += commandArgs + splitKArgs
     (s, o) = subprocess.getstatusoutput(command)
   
     otime = -1

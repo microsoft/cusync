@@ -69,16 +69,16 @@ $(BUILD)/attention-eval-tilesync: $(BUILD)/attention-eval-tilesync.cu
 	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG $< -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -DTILESYNC
 
 $(BUILD)/attention-gpt3-eval-stridedsync: $(BUILD)/attention-eval-stridedsync.cu
-	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG $< -o attention-eval-stridedsync -Xptxas -v -lcublas -Xcompiler=-fopenmp -DSTRIDEDSYNC -DGPT3
+	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG $< -o $(BUILD)/attention-eval-stridedsync -Xptxas -v -lcublas -Xcompiler=-fopenmp -DSTRIDEDSYNC -DGPT3
 
 $(BUILD)/attention-llama-eval-stridedsync: $(BUILD)/attention-eval-stridedsync.cu
-	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG $< -o attention-eval-stridedsync -Xptxas -v -lcublas -Xcompiler=-fopenmp -DSTRIDEDSYNC -DLLaMA
+	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG $< -o $(BUILD)/attention-eval-stridedsync -Xptxas -v -lcublas -Xcompiler=-fopenmp -DSTRIDEDSYNC -DLLaMA
 
 $(BUILD)/attention-gpt3-eval: $(BUILD)/attention-eval.cu
-	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG ./attention-eval.cu -o attention-eval -Xptxas -v -lcublas -Xcompiler=-fopenmp -DGPT3
+	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG ./attention-eval.cu -o $(BUILD)/attention-eval -Xptxas -v -lcublas -Xcompiler=-fopenmp -DGPT3
 
 $(BUILD)/attention-llama-eval: $(BUILD)/attention-eval.cu
-	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG ./attention-eval.cu -o attention-eval -Xptxas -v -lcublas -Xcompiler=-fopenmp -DLLaMA
+	$(NVCC)  $(DEFINES) $(INCLUDES) -O3 $(ARCH_FLAGS)  -DNDEBUG ./attention-eval.cu -o $(BUILD)/attention-eval -Xptxas -v -lcublas -Xcompiler=-fopenmp -DLLaMA
 
 clean:
-	rm -f mlp-rowsync mlp-tilesync attention-rowsync attention-tilesync
+	rm -f $(BUILD)/mlp-* $(BUILD)/attention-*

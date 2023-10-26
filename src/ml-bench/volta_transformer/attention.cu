@@ -33,7 +33,7 @@
 //</OPTIMIZATIONS>
 
 #if defined(TILESYNC)
-// #define NO_ATOMIC_ADD
+#define NO_ATOMIC_ADD
 #endif
 
 #if defined(TILESYNC) || defined(STRIDEDSYNC)
@@ -57,7 +57,7 @@ typedef cutlass::gemm::GemmShape<256, 256, 32> ShapeThreadBlock1;
 typedef cutlass::gemm::GemmShape<128, 64, 32> ShapeWarp1;
 const int SoftmaxRowTile = 1;
 using ShapeThreadBlock2 = cutlass::gemm::GemmShape<128, 128, 32>;
-using ShapeWarp2 = cutlass::gemm::GemmShape<64, 64, 32>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<64, 32, 32>;
 #else
 //<eval tiles>
 const int SoftmaxRowTile = 1;
@@ -77,29 +77,23 @@ struct TileSizeAttention {
 
 
 template<typename TileOrder, uint H, uint TileM, uint TileN>
-struct StridedSync {
-  uint waitValue_;
-  uint postValue_;
-
-  __device__ __host__ StridedSync(uint waitValue):
-    waitValue_(waitValue), postValue_(1) {}
-  
-  __device__ __host__ StridedSync() {}
+struct ConsecutiveSync {  
+  __device__ __host__ ConsecutiveSync() {}
 
   __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
-    return waitValue_;
+    return ((H/8)/TileN);
   }
 
   __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
     {return 1;}
 
   __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-    return TileOrder().tileIndex({tile.x/TileM, tile.y/((H/8)/TileN), 0},
+    return TileOrder().tileIndex({tile.x/TileM, (tile.y/TileN)/((H/8)/TileN), 0},
                                  {(grid.x/((H/8)/TileN)), grid.y, grid.z});
   }
 
   __device__ bool isSync(const dim3& tile, const dim3& grid) {
-    return tile.z == 0;
+    return tile.z == 1;
   }
 };
 
@@ -133,14 +127,14 @@ const uint Opts =
   using Sync1 = TileSync<TransposeXYOrder, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN>;
   using Sync2 = TileSync<TransposeXYOrder, TileSizeAttention::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN>;
   using XQKVCuStage = CuStage<TransposeXYOrder, NoSync, Sync1, Opts>;
-  using SCuStage    = CuStage<TransposeXYOrder, Sync2, Sync2,  Opts>;
-  using OCuStage    = CuStage<TransposeXYOrder, Sync2, Sync1,  Opts>;
+  using SCuStage    = CuStage<TransposeXYOrder, Sync1, Sync2,  Opts | Optimizations::AvoidCustomOrder>;
+  using OCuStage    = CuStage<TransposeXYOrder, Sync2, Sync1,  Opts | Optimizations::AvoidCustomOrder>;
   using XW12CuStage = CuStage<TransposeXYOrder, Sync1, NoSync, Opts>;
 #elif defined(STRIDEDSYNC)
   #if defined(GPT3)
-    using StridedSyncImpl = StridedSync<TransposeXYOrder, 12288, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN, 3>;
+    using StridedSyncImpl = ConsecutiveSync<TransposeXYOrder, 12288, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN>;
   #elif defined(LLaMA)
-    using StridedSyncImpl = StridedSync<TransposeXYOrder,  8192, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN, 3>;
+    using StridedSyncImpl = ConsecutiveSync<TransposeXYOrder,  8192, TileSizeLinearLayers::ShapeThreadBlock::kM, TileSizeLinearLayers::ShapeThreadBlock::kN>;
   #else
     #error "GPT3 or LLaMA"
   #endif
@@ -1064,9 +1058,9 @@ int run(int argc, char* argv[]) {
   Sync2 sync2(1,1);
   Sync1 sync3(1,1);
 #elif defined(STRIDEDSYNC)
-  StridedSyncImpl sync1(gridDim1.x/3);
-  RowSync sync2(gridDim2.x);
-  RowSync sync3(gridDim3.x);
+  StridedSyncImpl sync1;
+  Sync2 sync2(gridDim2.n());
+  Sync1 sync3(gridDim3.n());
 #else
   #error "Unknown Policy"
 #endif
