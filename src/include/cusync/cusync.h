@@ -2,6 +2,30 @@
 #include <stdio.h>
 #include <type_traits>
 
+#if (defined(__CUDACC__) || defined(__NVCC__))
+  #define CUSYNC_DEVICE __device__ __forceinline__
+#else
+  #define CUSYNC_DEVICE
+#endif
+
+#if (defined(__CUDACC__) || defined(__NVCC__))
+  #define CUSYNC_HOST __host__ __forceinline__
+#else
+  #define CUSYNC_HOST
+#endif
+
+#if (defined(__CUDACC__) || defined(__NVCC__))
+  #define CUSYNC_DEVICE_HOST __device__ __host__ __forceinline__
+#else
+  #define CUSYNC_DEVICE_HOST
+#endif
+
+#if (defined(__CUDACC__) || defined(__NVCC__))
+  #define CUSYNC_GLOBAL __global__
+#else
+  #define CUSYNC_GLOBAL
+#endif
+
 #include "tile-orders.h"
 #include "policies.h"
 #include "device-functions.h"
@@ -113,18 +137,6 @@ private:
   friend class CuSyncTest;
   friend class CuSync;
 
-  //Get tile status semaphore arrays
-  __device__ __host__ __forceinline__
-  volatile uint* getTileStatusToPost()         {return tileStatusWrite_;}
-  __device__ __host__ __forceinline__
-  volatile uint* getTileStatusToWait()         {return tileStatusRead_;}
-
-  //Set tile status semaphore arrays
-  __host__ __forceinline__
-  void setTileStatusToPost(volatile uint* ptr) {tileStatusWrite_ = ptr ;}
-  __host__ __forceinline__
-  void setTileStatusToWait(volatile uint* ptr) {tileStatusRead_  = ptr ;}
-
   //Call TileOrder parameter to generate tile order and store 
   //it in tileOrder
   CuSyncError buildScheduleBuffer() {
@@ -163,15 +175,21 @@ private:
 
   //Set the producer grid
   template<typename ProdCuStage>
-  __host__
   void setProdGrid(ProdCuStage& prod) {prodGrid_ = prod.grid();}
 
+  //Get tile status semaphore arrays
+  CUSYNC_DEVICE_HOST
+  volatile uint* getTileStatusToPost()         {return tileStatusWrite_;}
+  CUSYNC_DEVICE_HOST
+  volatile uint* getTileStatusToWait()         {return tileStatusRead_;}
+
+  //Set tile status semaphore arrays
+  CUSYNC_HOST
+  void setTileStatusToPost(volatile uint* ptr) {tileStatusWrite_ = ptr ;}
+  CUSYNC_HOST
+  void setTileStatusToWait(volatile uint* ptr) {tileStatusRead_  = ptr ;}
   
 public:
-  __device__ __host__ 
-  CuStage(): iter(1) {}
-
-  __host__
   CuStage(dim3 grid, dim3 tileSize, InputSyncPolicy inputPolicy, OutputSyncPolicy outputPolicy) : 
     grid_(grid), 
     prodGrid_(0), //set by CuSync::set* methods 
@@ -194,42 +212,55 @@ public:
         CUDA_CHECK(cudaMemset(kernelExecuted_, 0, sizeof(int)));
       }
     }
-  } 
-
-  /*
-   * Getters and setters for private variables.
-   */
-  //Getters for optimizations
-  __device__ __host__ __forceinline__
-  bool getNoAtomicAdd     () {return Opts & NoAtomicAdd;     }
-  __device__ __host__ __forceinline__
-  bool getAvoidWaitKernel () {return Opts & AvoidWaitKernel; }
-  __device__ __host__ __forceinline__
-  bool getReorderTileLoads() {return Opts & ReorderTileLoads;}
-  __device__ __host__ __forceinline__
-  bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
-
-  //A producer does have a policy for its output 
-  __device__ __host__ __forceinline__
-  bool isProducer() {return !std::is_same<OutputSyncPolicy, NoSync>::value;}
-
-  //A consumer does have a policy for its input 
-  __device__ __host__ __forceinline__
-  bool isConsumer() {return !std::is_same<InputSyncPolicy, NoSync>::value;}
+  }
 
   //Return grid size of this stage
   dim3 grid() {return grid_;}
 
+  CuSyncError invokeWaitKernel(cudaStream_t stream) {
+    if (!isProducer()) return CuSyncErrorNotProducer;
+    if (!getAvoidWaitKernel())
+      waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
+    if (cudaGetLastError() != cudaSuccess) return CuSyncErrorCUDAError;
+    return CuSyncSuccess;
+  }
+
+  void incrementIter() {iter += 1;}
+
+  CUSYNC_DEVICE 
+  CuStage(): iter(1) {}
+  
+  /*
+   * Getters and setters for private variables.
+   */
+  //Getters for optimizations
+  CUSYNC_DEVICE_HOST
+  bool getNoAtomicAdd     () {return Opts & NoAtomicAdd;     }
+  CUSYNC_DEVICE_HOST
+  bool getAvoidWaitKernel () {return Opts & AvoidWaitKernel; }
+  CUSYNC_DEVICE_HOST
+  bool getReorderTileLoads() {return Opts & ReorderTileLoads;}
+  CUSYNC_DEVICE_HOST
+  bool getAvoidCustomOrder() {return Opts & AvoidCustomOrder;}
+
+  //A producer does have a policy for its output 
+  CUSYNC_DEVICE_HOST
+  bool isProducer() {return !std::is_same<OutputSyncPolicy, NoSync>::value;}
+
+  //A consumer does have a policy for its input 
+  CUSYNC_DEVICE_HOST
+  bool isConsumer() {return !std::is_same<InputSyncPolicy, NoSync>::value;}
+
   /* 
    * Returns total number of thread blocks
    */
-  __device__ __host__
+  CUSYNC_DEVICE_HOST
   uint numTiles() {return grid_.x *grid_.y*grid_.z;}
 
   /*
    * Returns the tile index of tile using the input policy
    */
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   uint waitTileIndex(dim3 tile) {
     return inputPolicy_.tileIndex(tile, prodGrid_);;
   }
@@ -237,7 +268,7 @@ public:
   /*
    * Return semaphore value for the tile index
    */
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   uint waitSemValue(dim3 tile) {
     return globalVolatileLoad(&tileStatusRead_[waitTileIndex(tile)]);
   }
@@ -245,7 +276,7 @@ public:
   /*
    * Return expected wait value for the tile
    */
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   uint expectedWaitValue(dim3 tile) {
     return inputPolicy_.waitValue(tile, prodGrid_);
   }
@@ -253,7 +284,7 @@ public:
   /*
    * Wait until the semaphore of the tile reaches the wait value
    */
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   CuSyncError wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
     if (!isConsumer()) return CuSyncErrorNotConsumer;
     if (!inputPolicy_.isSync(tile, prodGrid_)) return;
@@ -277,7 +308,7 @@ public:
   /*
    * Post the status of completion of tile.
   */
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   CuSyncError post(const dim3& tile, uint postThread = 0) {
     if (!isProducer()) return CuSyncErrorNotProducer;
     __syncthreads();
@@ -300,7 +331,7 @@ public:
   /*
    * Returns the next tile process and set the waitkernel's semaphore if valid
    */  
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   dim3 tile(dim3* shared_storage) {
     if (!getAvoidWaitKernel()) {
       if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && 
@@ -328,20 +359,6 @@ public:
       return blockIdx;
     }
   }
-
-  __host__
-  CuSyncError invokeWaitKernel(cudaStream_t stream) {
-    if (!isProducer()) return CuSyncErrorNotProducer;
-    if (!getAvoidWaitKernel()) {
-      waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
-    }
-    
-    if (cudaGetLastError() != cudaSuccess) return CuSyncErrorCUDAError;
-    return CuSyncSuccess;
-  }
-
-  __host__
-  void incrementIter() {iter += 1;}  
 };
 
 struct CuSync {

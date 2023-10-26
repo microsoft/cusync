@@ -13,16 +13,15 @@ namespace cusync {
  * No Synchronization Policy. A CuStage will not call any methods of this policy.
  */
 struct NoSync {
-  __device__ __host__
   NoSync() {}
 
-  __device__ 
+  CUSYNC_DEVICE 
   uint waitValue(const dim3& tile, const dim3& grid) {return 0;}
-  __device__
+  CUSYNC_DEVICE
   uint tileIndex(const dim3& tile, const dim3& grid) {return 0;}
-  __device__ 
+  CUSYNC_DEVICE
   bool isSync   (const dim3& tile, const dim3& grid) {return false;}
-  __device__
+  CUSYNC_DEVICE
   uint postValue(const dim3& tile, const dim3& grid) {return 0;}
 };
 
@@ -39,33 +38,32 @@ struct RowSync {
   /*
    * Default constructor for RowSync initializes wait and post value to 0
    */
-  __device__ __host__
   RowSync()  : waitValue_(0), postValue_(0) {}
   
   /*
    * Initializes post value to 1 and wait value to the given value
    */
-  __device__ __host__
   RowSync(uint waitValue) : waitValue_(waitValue), postValue_(1) {}
 
   /*
    * Initializes post value and wait value
    */
-  __device__ __host__
   RowSync(uint waitValue, uint postValue) : 
     waitValue_(waitValue), postValue_(postValue) {}
-  
+
   /*
    * Returns the wait value
    */
-  __device__ uint waitValue(const dim3& tile, const dim3& grid) {
+  CUSYNC_DEVICE
+  uint waitValue(const dim3& tile, const dim3& grid) {
     return waitValue_;
   }
 
   /*
    * Returns the tile index as the x index of tile
    */
-  __device__ uint tileIndex(const dim3& tile, const dim3& grid) {
+  CUSYNC_DEVICE
+  uint tileIndex(const dim3& tile, const dim3& grid) {
     return tile.x/TileM;
   }
 
@@ -73,14 +71,16 @@ struct RowSync {
    * Returns true only when the tile is the first tile of column,
    * i.e., y index is 0
    */
-  __device__ bool isSync(const dim3& tile, const dim3& grid) {
+  CUSYNC_DEVICE
+  bool isSync(const dim3& tile, const dim3& grid) {
     return tile.z == 1;
   }
 
   /*
    * Returns the post value
    */
-  __device__ uint postValue(const dim3& tile, const dim3& grid) {
+  CUSYNC_DEVICE
+  uint postValue(const dim3& tile, const dim3& grid) {
     return postValue_;
   }
 };
@@ -96,40 +96,42 @@ struct TileSync {
   /*
    * Initializes both wait and post value to 1
    */
-  __device__ __host__ 
   TileSync(): waitValue_(1), postValue_(1) {}
   
   /*
    * Initializes both wait and post values to given values
    */
-  __device__ __host__ 
   TileSync(uint waitValue, uint postValue): 
     waitValue_(waitValue), postValue_(postValue) {}
-  
+
   /*
    * Return the wait value
    */
-  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
+  CUSYNC_DEVICE_HOST
+  uint waitValue(const dim3& tile, const dim3& grid) {
     return waitValue_;
   }
 
   /*
    * Return the post value
    */
-  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
+  CUSYNC_DEVICE_HOST
+  uint postValue(const dim3& tile, const dim3& grid) 
     {return postValue_;}
 
   /*
    * Return the linear tile index for the grid
    */
-  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
+  CUSYNC_DEVICE
+  constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
     return TileOrder().tileIndex({tile.x/TileM, tile.y/TileN, 0}, grid);
   }
 
   /*
    * Always synchronize on a tile
    */
-  __device__ __forceinline__ bool isSync(const dim3& tile, const dim3& grid) {
+  CUSYNC_DEVICE
+  bool isSync(const dim3& tile, const dim3& grid) {
     return tile.y%TileN == 0;
   }
 };
@@ -151,20 +153,18 @@ struct Conv2DTileSync {
   /*
    * Initializes both wait and post value to 1
    */
-  __device__ __host__
   Conv2DTileSync(): waitValue_(1), postValue_(1) {}
   
   /*
    * Initializes both wait and post value to given values
    */
-  __device__ __host__
   Conv2DTileSync(uint waitValue, uint postValue): 
     waitValue_(waitValue), postValue_(postValue) {}
   
   /*
    * Returns the wait value 
    */
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE
   uint waitValue(const dim3& tile, const dim3& grid) {
     return waitValue_;
   }
@@ -172,14 +172,14 @@ struct Conv2DTileSync {
   /*
    * Returns the post value 
    */
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE
   uint postValue(const dim3& tile, const dim3& grid) 
     {return postValue_;}
 
   /*
    * Returns the wait value 
    */
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   uint tileIndex(const dim3& tile, const dim3& grid) {
     return TileOrder().tileIndex({tile.x/TileM, (tile.y/TileN)/(R*S), 0}, grid);
   }
@@ -188,12 +188,13 @@ struct Conv2DTileSync {
    * Synchronizes tiles only when it is a multiple of 
    * the conv kernel size
    */
-  __device__ __forceinline__
+  CUSYNC_DEVICE
   bool isSync(const dim3& tile, const dim3& grid) {
     return (tile.y/TileN) % (R * S) == 0;
   }
 };
 
+#if 0
 /*
  * Other experimental sync policies
  */
@@ -348,4 +349,5 @@ struct FirstTileSync {
     return tile.y == 0;
   }
 };
+#endif
 }

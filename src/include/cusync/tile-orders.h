@@ -18,21 +18,21 @@ struct GenericTileOrder {
   /*
    * Returns a linear index of the thread block in the grid.
    */
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE_HOST
   uint blockIndex(const dim3& grid, const dim3& block)
   {return 0;}
 
   /*
    * Maps a tile to a thread block.
    */
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE
   dim3 tileToBlock(const dim3& tile)
   {return {0,0,0};}
 
   /*
    * Returns a linear tile index.
    */
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE
   uint tileIndex(const dim3& tile, const dim3& grid) {
     dim3 block = Child().tileToBlock(tile);
     return Child().blockIndex(grid, block);
@@ -45,12 +45,12 @@ struct GenericTileOrder {
  * It maps a tile {x, y, z} to threadblock {y, x, z}
  */
 struct TransposeXYOrder : public GenericTileOrder<TransposeXYOrder> {
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE_HOST
   uint blockIndex(const dim3& grid, const dim3& block) {
     return block.x + block.y * grid.x + block.z * grid.x * grid.y;
   }
 
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE
   dim3 tileToBlock(const dim3& tile) {
     return dim3{tile.y, tile.x, tile.z};
   }
@@ -61,17 +61,19 @@ struct TransposeXYOrder : public GenericTileOrder<TransposeXYOrder> {
  * It maps a tile {x,y,z} to threadblock {x,y,z}.
  */
 struct IdentityOrder : public GenericTileOrder<IdentityOrder> {
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE_HOST
   uint blockIndex(const dim3& grid, const dim3& block) {
     return block.x + block.y * grid.x + block.z * grid.x * grid.y;
   }
 
-  __device__ __host__ __forceinline__
+  CUSYNC_DEVICE
   dim3 tileToBlock(const dim3& tile) {
     return dim3{tile.x, tile.y, tile.z};
   }
 };
 
+#if 0
+//Experimental Orders
 struct OrderZXY {
   __device__ __host__ __forceinline__
   uint operator()(const dim3& grid, const dim3& tile) {
@@ -107,4 +109,5 @@ struct OrderZXY2 {
     return OrderZXY()(grid, block);
   }
 };
+#endif
 }

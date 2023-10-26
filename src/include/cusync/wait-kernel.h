@@ -8,7 +8,7 @@ namespace cusync {
  * @semaphore: Address to the unsigned integer semaphore 
  * @givenValue: Given value of the semaphore 
 */
-__global__
+CUSYNC_GLOBAL
 void waitKernel(volatile uint* semaphore, uint givenValue) {
   if (threadIdx.x == 0) {
     uint currVal = globalLoad(semaphore);
