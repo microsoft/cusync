@@ -53,11 +53,11 @@
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
-typedef cutlass::gemm::GemmShape<256, 128, 32> ShapeThreadBlock;
-typedef cutlass::gemm::GemmShape<128, 64, 32> ShapeWarp;
+typedef cutlass::gemm::GemmShape<256, 256, 32> ShapeThreadBlock1;
+typedef cutlass::gemm::GemmShape<128, 64, 32> ShapeWarp1;
 const int SoftmaxRowTile = 1;
-// using ShapeThreadBlock = cutlass::gemm::GemmShape<256, 128, 32>;
-// using ShapeWarp = cutlass::gemm::GemmShape<128, 64, 32>;
+using ShapeThreadBlock2 = cutlass::gemm::GemmShape<128, 128, 32>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<64, 64, 32>;
 #else
 //<eval tiles>
 const int SoftmaxRowTile = 1;
@@ -67,12 +67,12 @@ using ShapeWarp = cutlass::gemm::GemmShape<128, 64, 32>;
 #endif
 
 struct TileSizeLinearLayers {
-  using ShapeThreadBlock = ::ShapeThreadBlock;
-  using ShapeWarp = ::ShapeWarp;
+  using ShapeThreadBlock = ::ShapeThreadBlock1;
+  using ShapeWarp = ::ShapeWarp1;
 };
 struct TileSizeAttention {
-  using ShapeThreadBlock = ::ShapeThreadBlock;
-  using ShapeWarp = ::ShapeWarp;
+  using ShapeThreadBlock = ::ShapeThreadBlock2;
+  using ShapeWarp = ::ShapeWarp2;
 };
 
 

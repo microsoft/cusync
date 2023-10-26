@@ -37,6 +37,8 @@
 #if defined(TILESYNC)
 #if !defined(MLP_LLAMA)
   #define NO_ATOMIC_ADD
+#else
+  #undef NO_ATOMIC_ADD
 #endif
 #define REORDER_TILE_LOADS
 #endif
@@ -72,11 +74,11 @@ const uint Opts =
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
-using ShapeThreadBlock1 = cutlass::gemm::GemmShape<32, 256, 32>;
-using ShapeWarp1 = cutlass::gemm::GemmShape<32, 64, 32>;
+using ShapeThreadBlock1 = cutlass::gemm::GemmShape<256, 256, 32>;
+using ShapeWarp1 = cutlass::gemm::GemmShape<128, 64, 32>;
 
-using ShapeThreadBlock2 = cutlass::gemm::GemmShape<32, 128, 32>;
-using ShapeWarp2 = cutlass::gemm::GemmShape<32, 64, 32>;
+using ShapeThreadBlock2 = cutlass::gemm::GemmShape<256, 256, 32>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<128, 64, 32>;
 #else
 //<eval tiles>
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;  
@@ -84,14 +86,46 @@ using ShapeMMAWarp = cutlass::gemm::GemmShape<32, 64, 32>;
 //</eval tiles>
 #endif
 
+template<typename TileOrder, uint GridN, uint TileM, uint TileN, uint stride>
+struct StridedSync {
+  uint waitValue_;
+  uint postValue_;
+
+  __device__ __host__ StridedSync(){}
+
+  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
+    return stride;
+  }
+
+  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
+    {return 1;}
+
+  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
+    uint ty = tile.y/TileN;
+    if (ty >= (GridN/TileN)) ty = ty - (GridN/TileN);
+    // if (threadIdx.x == 0) printf("ty %d tile.y %d\n", ty, tile.y);
+    return TileOrder().tileIndex({tile.x/TileM, ty, 0},
+                                 grid);
+  }
+
+  __device__ bool isSync(const dim3& tile, const dim3& grid) {
+    return tile.y%TileN == 0;
+  }
+};
+
 #ifdef ROWSYNC
   using ProdCuStage   = CuStage<TransposeXYOrder, NoSync,  RowSync<ShapeThreadBlock1::kM>, Opts>;
   using ConsCuStage   = CuStage<TransposeXYOrder, RowSync<ShapeThreadBlock1::kM>, NoSync,  Opts>;
   using Sync = RowSync<ShapeThreadBlock1::kM>;
 #elif defined(TILESYNC)
+  #if defined(MLP_LLAMA)
+  using Sync = StridedSync<TransposeXYOrder, 2816, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN,2>;
+  #else
   using Sync = TileSync<TransposeXYOrder, ShapeThreadBlock1::kM, ShapeThreadBlock1::kN>;
+  #endif
   using ProdCuStage   = CuStage<TransposeXYOrder, NoSync, Sync,   Opts>;
   using ConsCuStage   = CuStage<TransposeXYOrder, Sync,   NoSync, Opts>;
+
 #else
   #error "Unknown Synchronization"
 #endif
@@ -129,7 +163,7 @@ using SmArch = cutlass::arch::Sm70;
   #endif
 #else
   //For correctness check no need to appy any epilogue
-  using EpilogueOp1 = cutlass::epilogue::thread::LinearCombinationGELU<
+  using EpilogueOp1 = cutlass::epilogue::thread::LinearCombination<
 #endif
     ElementOutput,                                        
     128 / cutlass::sizeof_bits<ElementOutput>::value,
