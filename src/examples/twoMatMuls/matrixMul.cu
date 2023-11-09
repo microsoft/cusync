@@ -47,8 +47,8 @@ using namespace cusync;
 //Define Producer and Consumer CuStage
 const int BLOCK_SIZE = 32;
 using Sync = TileSync<IdentityOrder, BLOCK_SIZE, BLOCK_SIZE>;
-using ProdCuStage = CuStage<OrderXYZ, NoSync, Sync>;
-using ConsCuStage = CuStage<OrderXYZ, Sync, NoSync>;
+using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync>;
+using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
 
 template <typename CuStageTy>
 __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
