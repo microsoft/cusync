@@ -285,6 +285,48 @@ if model == "gpt3" and attention_or_mlp == "attention":
         "AvoidWaitKernel": True},
       }
     },
+    512: {
+        1: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
+        2: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
+        4: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
+        8: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
+    },
     1024: {
         1: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
             "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
@@ -296,7 +338,27 @@ if model == "gpt3" and attention_or_mlp == "attention":
             "AvoidCustomOrder": True,
             "AvoidWaitKernel": True},
         },
+        2: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
         4: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
+        8: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
             "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
             "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
             "AvoidCustomOrder": True,
@@ -318,7 +380,27 @@ if model == "gpt3" and attention_or_mlp == "attention":
             "AvoidCustomOrder": True,
             "AvoidWaitKernel": True},
         },
+        2: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
         4: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
+            "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
+            "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True,
+            "ReorderTileLoads": True},
+            "rowsync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
+            "AvoidCustomOrder": True,
+            "AvoidWaitKernel": True},
+        },
+        8: {"TileSizes" : [[32, 128, 32, 32, 32, 32], [32, 128, 32, 32, 32, 32]],
             "baseline": {"split_ks": [4,16,2,2], "SoftmaxRowTile" : 1},
             "tilesync": {"split_ks": [4,8,2,2], "SoftmaxRowTile" : 1,
             "AvoidCustomOrder": True,
@@ -690,8 +772,50 @@ elif model == "llama" and attention_or_mlp == "attention":
       }
     },
     #SEQ = 1024 and above
+    512: {
+      1: {"TileSizes" : [[32, 128, 32, 32, 64, 32],[32, 128, 32, 32, 64, 32]],
+        "baseline": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1},
+        "tilesync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True,
+        "ReorderTileLoads": True},
+        "rowsync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True}
+      },
+      2: {"TileSizes" : [[32, 128, 32, 32, 64, 32],[32, 128, 32, 32, 64, 32]],
+        "baseline": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1},
+        "tilesync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True,
+        "ReorderTileLoads": True},
+        "rowsync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True}
+      },
+      4: {"TileSizes" : [[32, 128, 32, 32, 64, 32],[32, 128, 32, 32, 64, 32]],
+        "baseline": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1},
+        "tilesync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True,
+        "ReorderTileLoads": True},
+        "rowsync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True}
+      }
+    },
     1024: {
       1: {"TileSizes" : [[32, 128, 32, 32, 64, 32],[32, 128, 32, 32, 64, 32]],
+        "baseline": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1},
+        "tilesync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True,
+        "ReorderTileLoads": True},
+        "rowsync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True}
+      },
+      2: {"TileSizes" : [[32, 128, 32, 32, 64, 32],[32, 128, 32, 32, 64, 32]],
         "baseline": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1},
         "tilesync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
         "AvoidCustomOrder": True,
@@ -714,6 +838,16 @@ elif model == "llama" and attention_or_mlp == "attention":
     },
     2048: {
       1: {"TileSizes" :  [[32, 128, 32, 32, 64, 32],[32, 128, 32, 32, 64, 32]],
+        "baseline": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1},
+        "tilesync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True,
+        "ReorderTileLoads": True},
+        "rowsync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
+        "AvoidCustomOrder": True,
+        "AvoidWaitKernel": True}
+      },
+      2: {"TileSizes" :  [[32, 128, 32, 32, 64, 32],[32, 128, 32, 32, 64, 32]],
         "baseline": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1},
         "tilesync": {"split_ks": [6,3,2,2], "SoftmaxRowTile" : 1,
         "AvoidCustomOrder": True,
@@ -758,7 +892,8 @@ deleteFiles(policies+['baseline'], attention_or_mlp)
 if attention_or_mlp == "mlp":
   cases = [1,2,4,8,16,32,64,128,256,512,1024,2048]
 else:
-  cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
+  #cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
+  cases = [(512,1),(512,2), (512,4), (1024,1), (1024,2), (1024,4), (2048,1), (2048,2), (2048,4)]
 
 for case in cases:
   if attention_or_mlp == "attention":
@@ -766,6 +901,7 @@ for case in cases:
     seq = case[0]
   else:
     m = case
+    seq = 0
 
   caseTiles = None
   if attention_or_mlp == "attention":
@@ -858,7 +994,7 @@ for case in cases:
     bTimeTotal = baselinetimes["Total"]
     bTimeMatmul1 = baselinetimes["matmul1Time"]
     bTimeMatmul2 = baselinetimes["matmul2Time"]
-    print(f'{m} & {H} & baseline & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)}')
+    print(f'{m} & {seq} & {H} & baseline & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)}')
     baselineDone = True
 
   for syncPolicy in policies:
@@ -881,7 +1017,7 @@ for case in cases:
       overlaptimes  = getAllTimes(o, 'START-OVERLAPPED', 'END-OVERLAPPED')
       otime = overlaptimes["Total"]
 
-    print(f'{m} & {H} & {syncPolicy} & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)} & {"%.2f"%avg(otime)} & {"%.2f"%stdev(otime)} & {"%.2f"%(100 - avg(otime)/avg(bTimeTotal)*100)}')
+    print(f'{m} & {seq} & {H} & {syncPolicy} & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)} & {"%.2f"%avg(otime)} & {"%.2f"%stdev(otime)} & {"%.2f"%(100 - avg(otime)/avg(bTimeTotal)*100)}')
       # btime = re.findall(r'START-BASELINE: ([\.\d]+)', o)
       # baselineTimes[m] = btime[0]
       # otime = re.findall(r'START-OVERLAPPED elapsedtime ([\.\d]+)', o)
