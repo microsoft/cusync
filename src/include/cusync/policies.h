@@ -13,6 +13,7 @@ namespace cusync {
  * No Synchronization Policy. A CuStage will not call any methods of this policy.
  */
 struct NoSync {
+  CUSYNC_DEVICE_HOST
   NoSync() {}
 
   CUSYNC_DEVICE 
@@ -38,6 +39,7 @@ struct RowSync {
   /*
    * Default constructor for RowSync initializes wait and post value to 0
    */
+  CUSYNC_DEVICE_HOST
   RowSync()  : waitValue_(0), postValue_(0) {}
   
   /*
@@ -96,6 +98,7 @@ struct TileSync {
   /*
    * Initializes both wait and post value to 1
    */
+  CUSYNC_DEVICE_HOST
   TileSync(): waitValue_(1), postValue_(1) {}
   
   /*
@@ -153,6 +156,7 @@ struct Conv2DTileSync {
   /*
    * Initializes both wait and post value to 1
    */
+  CUSYNC_DEVICE_HOST
   Conv2DTileSync(): waitValue_(1), postValue_(1) {}
   
   /*
