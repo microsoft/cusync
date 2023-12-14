@@ -6,9 +6,9 @@
  *  
  *  Returns the loaded unsigned integer 
  */
-__device__ __forceinline__
-uint globalVolatileLoad(volatile uint* addr) {
-  uint val;
+CUSYNC_DEVICE
+uint32_t globalVolatileLoad(volatile uint32_t* addr) {
+  uint32_t val;
   asm volatile ("ld.global.acquire.gpu.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
   return val;
 }
@@ -19,9 +19,9 @@ uint globalVolatileLoad(volatile uint* addr) {
  *  
  *  Returns the loaded unsigned integer 
  */
-__device__ __forceinline__ 
-uint globalLoad(volatile uint* addr) {
-  uint val;
+CUSYNC_DEVICE
+uint32_t globalLoad(volatile uint32_t* addr) {
+  uint32_t val;
   asm volatile ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
   return val;
 }

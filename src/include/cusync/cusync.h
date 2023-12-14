@@ -1,6 +1,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <type_traits>
+#include <stdint.h>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <cuda_device_runtime_api.h>
 
 #if (defined(__CUDACC__) || defined(__NVCC__))
   #define CUSYNC_DEVICE __device__ __forceinline__
@@ -125,13 +129,13 @@ private:
   //GPU pointer to array of order of tiles
   dim3* tileOrder;
   //GPU pointer to counter of tile for index in tile order
-  uint* tileCounter;
+  uint32_t* tileCounter;
 
   //GPU pointer to wait kernel semaphore
   int* kernelExecuted_;
   
-  volatile uint* tileStatusWrite_;
-  volatile uint* tileStatusRead_;
+  volatile uint32_t* tileStatusWrite_;
+  volatile uint32_t* tileStatusRead_;
 
   //CuSyncTest and CuSync can access private members
   friend class CuSyncTest;
@@ -148,13 +152,13 @@ private:
     CUDA_CHECK(cudaMalloc(&tileOrder, sizeof(*tileOrder) * numTiles()));
     
     dim3 invalidBlock = {numTiles(), 0, 0};
-    for (uint id = 0; id < numTiles(); id++) {
+    for (uint32_t id = 0; id < numTiles(); id++) {
       hTileOrder[id] = invalidBlock;
     }
 
-    for (uint z = 0; z < grid_.z; z++) {
-    for (uint y = 0; y < grid_.y; y++) {
-    for (uint x = 0; x < grid_.x; x++) {
+    for (uint32_t z = 0; z < grid_.z; z++) {
+    for (uint32_t y = 0; y < grid_.y; y++) {
+    for (uint32_t x = 0; x < grid_.x; x++) {
       size_t id = TileOrder().blockIndex(grid_, {x, y, z});
       if (hTileOrder[id].x == invalidBlock.x) {
         hTileOrder[id] = {x, y, z};
@@ -179,15 +183,15 @@ private:
 
   //Get tile status semaphore arrays
   CUSYNC_DEVICE_HOST
-  volatile uint* getTileStatusToPost()         {return tileStatusWrite_;}
+  volatile uint32_t* getTileStatusToPost()         {return tileStatusWrite_;}
   CUSYNC_DEVICE_HOST
-  volatile uint* getTileStatusToWait()         {return tileStatusRead_;}
+  volatile uint32_t* getTileStatusToWait()         {return tileStatusRead_;}
 
   //Set tile status semaphore arrays
   CUSYNC_HOST
-  void setTileStatusToPost(volatile uint* ptr) {tileStatusWrite_ = ptr ;}
+  void setTileStatusToPost(volatile uint32_t* ptr) {tileStatusWrite_ = ptr ;}
   CUSYNC_HOST
-  void setTileStatusToWait(volatile uint* ptr) {tileStatusRead_  = ptr ;}
+  void setTileStatusToWait(volatile uint32_t* ptr) {tileStatusRead_  = ptr ;}
   
 public:
   CuStage(dim3 grid, dim3 tileSize, InputSyncPolicy inputPolicy, OutputSyncPolicy outputPolicy) : 
@@ -204,7 +208,7 @@ public:
       //Allocate tile status semaphore array for all tiles
       //CuSync::set* methods set this array to consumer stages
       CUDA_CHECK(cudaMalloc(&tileStatusWrite_, numTiles() * sizeof(int)));
-      CUDA_CHECK(cudaMemset((uint*)tileStatusWrite_, 0, numTiles() * sizeof(int)));
+      CUDA_CHECK(cudaMemset((uint32_t*)tileStatusWrite_, 0, numTiles() * sizeof(int)));
 
       //Allocate wait kernel semaphore
       if (!getAvoidWaitKernel()) {
@@ -220,10 +224,11 @@ public:
   CuSyncError invokeWaitKernel(cudaStream_t stream) {
     if (!isProducer()) return CuSyncErrorNotProducer;
     if (!getAvoidWaitKernel())
-      waitKernel<<<1,1,0,stream>>>((uint*)kernelExecuted_, iter);
+      waitKernel<<<1,1,0,stream>>>((uint32_t*)kernelExecuted_, iter);
     if (cudaGetLastError() != cudaSuccess) return CuSyncErrorCUDAError;
     return CuSyncSuccess;
   }
+
 
   void incrementIter() {iter += 1;}
 
@@ -255,13 +260,13 @@ public:
    * Returns total number of thread blocks
    */
   CUSYNC_DEVICE_HOST
-  uint numTiles() {return grid_.x *grid_.y*grid_.z;}
+  uint32_t numTiles() {return grid_.x *grid_.y*grid_.z;}
 
   /*
    * Returns the tile index of tile using the input policy
    */
   CUSYNC_DEVICE
-  uint waitTileIndex(dim3 tile) {
+  uint32_t waitTileIndex(dim3 tile) {
     return inputPolicy_.tileIndex(tile, prodGrid_);;
   }
 
@@ -269,7 +274,7 @@ public:
    * Return semaphore value for the tile index
    */
   CUSYNC_DEVICE
-  uint waitSemValue(dim3 tile) {
+  uint32_t waitSemValue(dim3 tile) {
     return globalVolatileLoad(&tileStatusRead_[waitTileIndex(tile)]);
   }
 
@@ -277,7 +282,7 @@ public:
    * Return expected wait value for the tile
    */
   CUSYNC_DEVICE
-  uint expectedWaitValue(dim3 tile) {
+  uint32_t expectedWaitValue(dim3 tile) {
     return inputPolicy_.waitValue(tile, prodGrid_);
   }
 
@@ -285,80 +290,19 @@ public:
    * Wait until the semaphore of the tile reaches the wait value
    */
   CUSYNC_DEVICE
-  CuSyncError wait(dim3& tile, uint waitingThread = 0, bool callSync = true) {
-    if (!isConsumer()) return CuSyncErrorNotConsumer;
-    if (!inputPolicy_.isSync(tile, prodGrid_)) return;
-    
-    if (threadIdx.x == waitingThread && threadIdx.y == 0 && threadIdx.z == 0) {
-      uint w = inputPolicy_.waitValue(tile, prodGrid_);
-      uint idx = inputPolicy_.tileIndex(tile, prodGrid_);
-      auto v = globalLoad(&tileStatusRead_[idx]);
-      while(v < iter * w) {
-        // printf("v %d tile {%d, %d, %d} w %d\n", v, tile.x, tile.y, tile.z, w);
-        v = globalVolatileLoad(&tileStatusRead_[idx]);
-      }
-    }
-
-    if (callSync)
-      __syncthreads();
-    
-    return CuSyncSuccess;
-  }
+  CuSyncError wait(dim3& tile, uint32_t waitingThread = 0, bool callSync = true);
 
   /*
    * Post the status of completion of tile.
   */
   CUSYNC_DEVICE
-  CuSyncError post(const dim3& tile, uint postThread = 0) {
-    if (!isProducer()) return CuSyncErrorNotProducer;
-    __syncthreads();
-    if (threadIdx.x == postThread && threadIdx.y == 0 && threadIdx.z == 0) {
-      __threadfence_system();
-      uint idx = outputPolicy_.tileIndex(tile, grid_);
-      if (!getNoAtomicAdd()) {
-        atomicAdd((int*)&tileStatusWrite_[idx],
-                  outputPolicy_.postValue(tile, grid_));
-      } else {
-        uint val = outputPolicy_.postValue(tile, grid_) * iter;
-        asm volatile ("st.global.release.gpu.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));
-      }
-    }
-
-    __syncwarp();
-    return CuSyncSuccess;
-  }
+  CuSyncError post(const dim3& tile, uint32_t postThread = 0);
 
   /*
    * Returns the next tile process and set the waitkernel's semaphore if valid
    */  
   CUSYNC_DEVICE
-  dim3 tile(dim3* shared_storage) {
-    if (!getAvoidWaitKernel()) {
-      if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && 
-          blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0 && isProducer()) {
-        *kernelExecuted_ = iter;
-      }
-    }
-    if (!getAvoidCustomOrder()) {
-      if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
-        if (shared_storage != nullptr) {
-          uint linear_id = atomicAdd(tileCounter, 1);
-          if (linear_id == numTiles() - 1) {
-            *tileCounter = 0;
-          }
-          *shared_storage = tileOrder[linear_id];
-        }
-      }    
-
-      if (shared_storage != nullptr) {
-        __syncthreads();
-        return *shared_storage;
-      }
-      return blockIdx;
-    } else {
-      return blockIdx;
-    }
-  }
+  dim3 tile(dim3* shared_storage);
 };
 
 struct CuSync {
@@ -375,3 +319,6 @@ struct CuSync {
   }
 };
 }
+
+
+#include "cusync_device_defs.h"

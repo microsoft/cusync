@@ -19,7 +19,7 @@ struct GenericTileOrder {
    * Returns a linear index of the thread block in the grid.
    */
   CUSYNC_DEVICE_HOST
-  uint blockIndex(const dim3& grid, const dim3& block)
+  uint32_t blockIndex(const dim3& grid, const dim3& block)
   {return 0;}
 
   /*
@@ -33,7 +33,7 @@ struct GenericTileOrder {
    * Returns a linear tile index.
    */
   CUSYNC_DEVICE
-  uint tileIndex(const dim3& tile, const dim3& grid) {
+  uint32_t tileIndex(const dim3& tile, const dim3& grid) {
     dim3 block = Child().tileToBlock(tile);
     return Child().blockIndex(grid, block);
   }
@@ -46,7 +46,7 @@ struct GenericTileOrder {
  */
 struct TransposeXYOrder : public GenericTileOrder<TransposeXYOrder> {
   CUSYNC_DEVICE_HOST
-  uint blockIndex(const dim3& grid, const dim3& block) {
+  uint32_t blockIndex(const dim3& grid, const dim3& block) {
     return block.x + block.y * grid.x + block.z * grid.x * grid.y;
   }
 
@@ -62,7 +62,7 @@ struct TransposeXYOrder : public GenericTileOrder<TransposeXYOrder> {
  */
 struct IdentityOrder : public GenericTileOrder<IdentityOrder> {
   CUSYNC_DEVICE_HOST
-  uint blockIndex(const dim3& grid, const dim3& block) {
+  uint32_t blockIndex(const dim3& grid, const dim3& block) {
     return block.x + block.y * grid.x + block.z * grid.x * grid.y;
   }
 
@@ -76,7 +76,7 @@ struct IdentityOrder : public GenericTileOrder<IdentityOrder> {
 //Experimental Orders
 struct OrderZXY {
   __device__ __host__ __forceinline__
-  uint operator()(const dim3& grid, const dim3& tile) {
+  uint32_t operator()(const dim3& grid, const dim3& tile) {
     return tile.z + tile.x * grid.z + tile.y * grid.x * grid.z;
   }
 
@@ -86,7 +86,7 @@ struct OrderZXY {
   }
 
   __device__ __host__ __forceinline__
-  uint tileIndex(const dim3& tile, const dim3& grid) {
+  uint32_t tileIndex(const dim3& tile, const dim3& grid) {
     dim3 block = tileToBlock(tile);
     return this->operator()(grid, block);
   }
@@ -94,7 +94,7 @@ struct OrderZXY {
 
 struct OrderZXY2 {
   __device__ __host__ __forceinline__
-  uint operator()(const dim3& grid, const dim3& tile) {
+  uint32_t operator()(const dim3& grid, const dim3& tile) {
     return tile.x + tile.y * grid.x + tile.z * grid.x * grid.y;
   }
 
@@ -104,7 +104,7 @@ struct OrderZXY2 {
   }
 
   __device__ __host__ __forceinline__
-  uint tileIndex(const dim3& tile, const dim3& grid) {
+  uint32_t tileIndex(const dim3& tile, const dim3& grid) {
     dim3 block = tileToBlock(tile);
     return OrderZXY()(grid, block);
   }

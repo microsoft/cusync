@@ -9,9 +9,9 @@ namespace cusync {
  * @givenValue: Given value of the semaphore 
 */
 CUSYNC_GLOBAL
-void waitKernel(volatile uint* semaphore, uint givenValue) {
+void waitKernel(volatile uint32_t* semaphore, uint32_t givenValue) {
   if (threadIdx.x == 0) {
-    uint currVal = globalLoad(semaphore);
+    uint32_t currVal = globalLoad(semaphore);
     while(currVal < givenValue) {
       currVal = globalVolatileLoad(semaphore);
     }
