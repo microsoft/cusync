@@ -6,34 +6,7 @@
 #include <cuda_runtime_api.h>
 #include <cuda_device_runtime_api.h>
 
-#if (defined(__CUDACC__) || defined(__NVCC__))
-  #define CUSYNC_DEVICE __device__ __forceinline__
-#else
-  #define CUSYNC_DEVICE
-#endif
-
-#if (defined(__CUDACC__) || defined(__NVCC__))
-  #define CUSYNC_HOST __host__ __forceinline__
-#else
-  #define CUSYNC_HOST
-#endif
-
-#if (defined(__CUDACC__) || defined(__NVCC__))
-  #define CUSYNC_DEVICE_HOST __device__ __host__ __forceinline__
-#else
-  #define CUSYNC_DEVICE_HOST
-#endif
-
-#if (defined(__CUDACC__) || defined(__NVCC__))
-  #define CUSYNC_GLOBAL __global__
-#else
-  #define CUSYNC_GLOBAL
-#endif
-
-#include "tile-orders.h"
-#include "policies.h"
-#include "device-functions.h"
-#include "wait-kernel.h"
+#include "cusync_defines.h"
 
 #pragma once
 
@@ -47,6 +20,9 @@
 } while(0);
 
 #define DIVUP(x, y) (((x) + (y) - 1)/(y));
+
+#include "policies.h"
+#include "wait-kernel.h"
 
 namespace cusync {
 /*
@@ -224,7 +200,7 @@ public:
   CuSyncError invokeWaitKernel(cudaStream_t stream) {
     if (!isProducer()) return CuSyncErrorNotProducer;
     if (!getAvoidWaitKernel())
-      waitKernel<<<1,1,0,stream>>>((uint32_t*)kernelExecuted_, iter);
+      cusync::invokeWaitKernel((uint32_t*)kernelExecuted_, iter, stream);
     if (cudaGetLastError() != cudaSuccess) return CuSyncErrorCUDAError;
     return CuSyncSuccess;
   }
@@ -320,5 +296,8 @@ struct CuSync {
 };
 }
 
-
+#if (defined(__NVCC__) || defined(__CUDACC__))
 #include "cusync_device_defs.h"
+#include "tile-orders.h"
+#include "device-functions.h"
+#endif

@@ -16,6 +16,7 @@ struct NoSync {
   CUSYNC_DEVICE_HOST
   NoSync() {}
 
+#if (defined(__CUDACC__) || defined(__NVCC__))
   CUSYNC_DEVICE 
   uint32_t waitValue(const dim3& tile, const dim3& grid) {return 0;}
   CUSYNC_DEVICE
@@ -24,6 +25,7 @@ struct NoSync {
   bool isSync   (const dim3& tile, const dim3& grid) {return false;}
   CUSYNC_DEVICE
   uint32_t postValue(const dim3& tile, const dim3& grid) {return 0;}
+#endif
 };
 
 /*
@@ -53,6 +55,7 @@ struct RowSync {
   RowSync(uint32_t waitValue, uint32_t postValue) : 
     waitValue_(waitValue), postValue_(postValue) {}
 
+#if (defined(__CUDACC__) || defined(__NVCC__))
   /*
    * Returns the wait value
    */
@@ -85,6 +88,7 @@ struct RowSync {
   uint32_t postValue(const dim3& tile, const dim3& grid) {
     return postValue_;
   }
+#endif
 };
 
 /*
@@ -107,6 +111,7 @@ struct TileSync {
   TileSync(uint32_t waitValue, uint32_t postValue): 
     waitValue_(waitValue), postValue_(postValue) {}
 
+#if (defined(__CUDACC__) || defined(__NVCC__))
   /*
    * Return the wait value
    */
@@ -137,6 +142,7 @@ struct TileSync {
   bool isSync(const dim3& tile, const dim3& grid) {
     return tile.y%TileN == 0;
   }
+#endif
 };
 
 /*
@@ -164,7 +170,8 @@ struct Conv2DTileSync {
    */
   Conv2DTileSync(uint32_t waitValue, uint32_t postValue): 
     waitValue_(waitValue), postValue_(postValue) {}
-  
+
+#if (defined(__CUDACC__) || defined(__NVCC__))
   /*
    * Returns the wait value 
    */
@@ -196,6 +203,7 @@ struct Conv2DTileSync {
   bool isSync(const dim3& tile, const dim3& grid) {
     return (tile.y/TileN) % (R * S) == 0;
   }
+#endif
 };
 
 #if 0

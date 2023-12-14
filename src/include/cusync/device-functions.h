@@ -1,3 +1,5 @@
+#include "cusync_defines.h"
+
 #pragma once
 
 /*
@@ -7,7 +9,7 @@
  *  Returns the loaded unsigned integer 
  */
 CUSYNC_DEVICE
-uint32_t globalVolatileLoad(volatile uint32_t* addr) {
+static uint32_t globalVolatileLoad(volatile uint32_t* addr) {
   uint32_t val;
   asm volatile ("ld.global.acquire.gpu.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
   return val;
@@ -20,7 +22,7 @@ uint32_t globalVolatileLoad(volatile uint32_t* addr) {
  *  Returns the loaded unsigned integer 
  */
 CUSYNC_DEVICE
-uint32_t globalLoad(volatile uint32_t* addr) {
+static uint32_t globalLoad(volatile uint32_t* addr) {
   uint32_t val;
   asm volatile ("ld.global.cg.u32 {%0}, [%1];" : "=r"(val) : "l"(addr));
   return val;
