@@ -36,7 +36,6 @@ namespace cusync {
       uint32_t idx = inputPolicy_.tileIndex(tile, prodGrid_);
       auto v = globalLoad(&tileStatusRead_[idx]);
       while(v < iter * w) {
-        // printf("v %d tile {%d, %d, %d} w %d\n", v, tile.x, tile.y, tile.z, w);
         v = globalVolatileLoad(&tileStatusRead_[idx]);
       }
     }

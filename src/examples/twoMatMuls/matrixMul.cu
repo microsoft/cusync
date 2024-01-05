@@ -99,7 +99,8 @@ __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
     // to shared memory; each thread loads
     // one element of each matrix
     // Wait for tile of A to be computed by producer kernel
-    dim3 tile = {(a - aBegin)/BLOCK_SIZE, by, 1};
+    
+    dim3 tile = {(uint32_t)(a - aBegin), (uint32_t)by * BLOCK_SIZE, 1};
     custage.wait(tile);
 
     As[ty][tx] = A[a + wA * ty + tx];
@@ -112,7 +113,6 @@ __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
     // each thread computes one element
     // of the block sub-matrix
 #pragma unroll
-
     for (int k = 0; k < BLOCK_SIZE; ++k) {
       Csub += As[ty][k] * Bs[k][tx];
     }
@@ -129,7 +129,7 @@ __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
   C[c + wB * ty + tx] = Csub;
 
   // Post the status of tile when computed
-  custage.post(tile);
+  custage.post({(uint32_t)bx * BLOCK_SIZE, (uint32_t)by * BLOCK_SIZE, 0});
 }
 
 void ConstantInit(float *data, int size, float val) {
