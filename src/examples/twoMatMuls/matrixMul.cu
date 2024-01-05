@@ -225,9 +225,8 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
 
   //Invoke wait kernel
   prod.invokeWaitKernel(cons_stream);
-  // //Invoke consumer kernel (E = C * D)
-  // CUDA_CHECK(cudaDeviceSynchronize());
-
+  
+  //Invoke consumer kernel (E = C * D)
   MatrixMulCUDA<ConsCuStage>
         <<<grid, threads, 0, cons_stream>>>(cons, d_E, d_C, d_D, dimsA.x, dimsB.x);
   
