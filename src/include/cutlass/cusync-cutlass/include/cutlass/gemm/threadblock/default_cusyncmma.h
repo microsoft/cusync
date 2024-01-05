@@ -44,6 +44,7 @@
 #include "cutlass/transform/threadblock/predicated_tile_iterator.h"
 #include "cutlass/transform/threadblock/predicated_tile_iterator_2dthreadtile.h"
 #include "cutlass/gemm/threadblock/cusyncmma_pipelined.h"
+#include "cutlass/gemm/threadblock/cusyncmma_multistage.h"
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/gemm/threadblock/default_mma_core_simt.h"
 #include "cutlass/gemm/threadblock/default_mma_core_sm70.h"

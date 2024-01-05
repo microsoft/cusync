@@ -2,7 +2,7 @@ import subprocess
 import re
 import sys
 import os
-import tile_sizes
+import tile_sizes_db
 
 attention_or_mlp = sys.argv[1].lower()
 model = sys.argv[2].lower()
@@ -317,7 +317,7 @@ for case in cases:
     #   command += buildDir("%s-%s-eval-%s "%(attention_or_mlp, model, syncPolicy))
     # else:
     command += buildDir("%s-eval-%s "%(attention_or_mlp, syncPolicy))
-    command += commandArgs + splitKArgs + + " --policy cusync"
+    command += commandArgs + splitKArgs + " --policy cusync"
     (s, o) = subprocess.getstatusoutput(command)
   
     otime = -1
