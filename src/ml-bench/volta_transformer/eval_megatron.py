@@ -4,8 +4,10 @@ import sys
 import os
 attention_or_mlp = sys.argv[1]
 model = sys.argv[2]
+arch = sys.argv[3]
 
 assert attention_or_mlp in ["attention", "mlp"]
+assert arch.lower() in ["v100", "a100"]
 
 baselineTimes = {}
 cublasTimes = {}
@@ -113,15 +115,27 @@ def genFiles(batchInfo, syncPolicy, attention_or_mlp):
   tilesTemplate = """using ShapeThreadBlock%d = cutlass::gemm::GemmShape<%d, %d, %d>;  
 using ShapeWarp%d = cutlass::gemm::GemmShape<%d, %d, %d>;"""
   tilesCode = ""
-  if len(batchInfo["TileSizes"]) > 1:
-    for i,tile in enumerate(batchInfo["TileSizes"]):
+
+  tileSize = batchInfo[syncPolicy]["TileSizes"] if "TileSizes" in batchInfo[syncPolicy] else  batchInfo["TileSizes"]
+  if len(tileSize) > 1:
+    for i,tile in enumerate(tileSize):
       tilesCode += tilesTemplate % tuple([i+1] + tile[:3] + [i+1] + tile[3:])
       tilesCode += "\n"
   else:
     tilesTemplate = """using ShapeThreadBlock = cutlass::gemm::GemmShape<%d, %d, %d>;  
 using ShapeWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
-    tilesCode = tilesTemplate % tuple(batchInfo["TileSizes"][0])
+    tilesCode = tilesTemplate % tuple(tileSize[0])
 
+  NumStages = batchInfo[syncPolicy]["NumStages"] if "NumStages" in batchInfo[syncPolicy] else  batchInfo["NumStages"]
+  numStagesCode = ""
+  NumStagesTemplate = "const uint NumStages%d = %d;\n"
+  if isinstance(NumStages, list) and len(NumStages) > 1:
+    for i,num in enumerate(NumStages):
+      numStagesCode += NumStagesTemplate % tuple([i+1, int(num)])
+  else:
+    numStagesCode = NumStagesTemplate %(1, int(NumStages)) + \
+                NumStagesTemplate %(2, int(NumStages))
+  tilesCode+=numStagesCode
   batchInfo = batchInfo["tilesync"] if syncPolicy == "stridedsync" or syncPolicy == 'baseline' else batchInfo[syncPolicy]
   if "SoftmaxRowTile" in batchInfo:
     tilesCode += "\nconst uint SoftmaxRowTile = %d;"%batchInfo["SoftmaxRowTile"]
@@ -890,7 +904,7 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
 if attention_or_mlp == "mlp":
-  cases = [1,2,4,8,16,32,64,128,256,512,1024,2048]
+  cases = [1,2,4,8,64,128,256,512,768,1024,1280,1536,1792,2048]
 else:
   #cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
   cases = [(512,1),(512,2), (512,4), (1024,1), (1024,2), (1024,4), (2048,1), (2048,2), (2048,4)]
@@ -981,7 +995,7 @@ for case in cases:
   commandArgs = f" --batch {m} --check false --model {model.lower()}"
   if attention_or_mlp == "attention":
     commandArgs += f" --seqlen {(seq - m) if seq > m else seq}"
-  baselineCommand = buildDir(f"{attention_or_mlp}-eval-baseline") + commandArgs + splitKArgs 
+  baselineCommand = buildDir(f"{attention_or_mlp}-eval-baseline") + commandArgs + splitKArgs + " --policy baseline"
   (s, o) = subprocess.getstatusoutput(baselineCommand)
   # print(o)
   if "Invalid" in o:
@@ -998,14 +1012,14 @@ for case in cases:
     baselineDone = True
 
   for syncPolicy in policies:
-    splitKs = caseTiles["tilesync"] if syncPolicy == "stridedsync" else caseTiles[syncPolicy]
+    split_ks = (caseTiles["tilesync"] if syncPolicy == "stridedsync" else caseTiles[syncPolicy])["split_ks"]
     splitKArgs = " " + " ".join([f"--split-k{i+1} {split_ks[i]}" for i in range(len(split_ks))])
     command = ""
     # if attention_or_mlp == 'attention' and syncPolicy == 'stridedsync':
     #   command += buildDir("%s-%s-eval-%s "%(attention_or_mlp, model, syncPolicy))
     # else:
     command += buildDir("%s-eval-%s "%(attention_or_mlp, syncPolicy))
-    command += commandArgs + splitKArgs
+    command += commandArgs + splitKArgs + + " --policy cusync"
     (s, o) = subprocess.getstatusoutput(command)
   
     otime = -1

@@ -17,7 +17,7 @@ struct NoSync {
   NoSync() {}
 
 #if (defined(__CUDACC__) || defined(__NVCC__))
-  CUSYNC_DEVICE 
+  CUSYNC_DEVICE
   uint32_t waitValue(const dim3& tile, const dim3& grid) {return 0;}
   CUSYNC_DEVICE
   uint32_t tileIndex(const dim3& tile, const dim3& grid) {return 0;}

@@ -461,7 +461,7 @@ struct DefaultCuSyncMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB,
           ElementB, LayoutB, 0, ThreadMapB, AccessTypeB, GatherB, PermuteBLayout>;
 
   // Define the threadblock-scoped multistage matrix multiply
-  using ThreadblockMma = cutlass::gemm::threadblock::MmaMultistage<
+  using ThreadblockMma = cutlass::gemm::threadblock::CuSyncMmaMultistage<
       typename MmaCore::Shape, IteratorA, typename MmaCore::SmemIteratorA,
       MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
       MmaCore::kCacheOpB, ElementAccumulator, LayoutC,
@@ -554,7 +554,7 @@ struct DefaultCuSyncMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB,
           ElementB, LayoutB, 0, ThreadMapB, AccessTypeB, GatherB, PermuteBLayout>;
 
   // Define the threadblock-scoped multistage matrix multiply
-  using ThreadblockMma = cutlass::gemm::threadblock::MmaMultistage<
+  using ThreadblockMma = cutlass::gemm::threadblock::CuSyncMmaMultistage<
       typename MmaCore::Shape, IteratorA, typename MmaCore::SmemIteratorA,
       MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
       MmaCore::kCacheOpB, ElementAccumulator, LayoutC,
@@ -625,7 +625,7 @@ struct DefaultCuSyncMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB,
           ElementB, LayoutB, 0, ThreadMapB, AccessTypeB>;
 
   // Define the threadblock-scoped multistage matrix multiply
-  using ThreadblockMma = cutlass::gemm::threadblock::MmaMultistage<
+  using ThreadblockMma = cutlass::gemm::threadblock::CuSyncMmaMultistage<
       typename MmaCore::Shape, IteratorA, typename MmaCore::SmemIteratorA,
       MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
       MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor,

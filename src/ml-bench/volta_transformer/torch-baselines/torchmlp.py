@@ -3,16 +3,21 @@ import sys
 import time
 
 M = int(sys.argv[1])
-N = int(sys.argv[2])
-K = int(sys.argv[3])
-L = int(sys.argv[4])
-model = sys.argv[5]
+model = sys.argv[2]
 assert model in ['gpt3', 'llama']
 
-X = torch.ones((M, K), dtype=torch.half).cuda()
-W1 = torch.ones((K, N), dtype=torch.half).cuda()
-W2 = torch.ones((N, L), dtype=torch.half).cuda()
-V = torch.ones((K, N), dtype=torch.half).cuda()
+if model == 'gpt3':
+    H = 12288
+    X = torch.ones((M, H), dtype=torch.half).cuda()
+    W1 = torch.ones((H, H//2), dtype=torch.half).cuda()
+    W2 = torch.ones((H//2, H), dtype=torch.half).cuda()
+else:
+    H = 8192
+    H2 = ((H//3 + 127)//128)*128
+    X = torch.ones((M, H), dtype=torch.half).cuda()
+    W1 = torch.ones((H, 2*H2), dtype=torch.half).cuda()
+    W2 = torch.ones((H2, H), dtype=torch.half).cuda()
+    XW1_ = torch.ones((M, H2), dtype=torch.half).cuda()
 
 epochs = 20
 for i in range(epochs):
@@ -29,8 +34,7 @@ if model == 'gpt3':
 elif model == 'llama':    
     for i in range(epochs):
         XW1 = X@W1
-        XV = X@V
-        out = XW1@W2
+        out = XW1_@W2
     torch.cuda.synchronize()
 end = time.time_ns()
 

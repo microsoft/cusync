@@ -206,22 +206,20 @@ struct CuSyncGemm {
   //TODO: Had to make Params non-const, does that have any perf issue?
   CUTLASS_DEVICE
   void operator()(Params &params, SharedStorage &shared_storage) {
-    CuStageImpl& stage = params.custage; //(isProducerOrConsumer) ? params.syncHandle.prod() : params.syncHandle.cons();
+    CuStageImpl& stage = params.custage;
     dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     
     uint block_idx_y = new_block_idx.y;
     uint block_idx_x = new_block_idx.x;
     
-    // for (uint block_idx_y = start_block_idx_y; block_idx_y < params.grid_tiled_shape.n(); block_idx_y += grid_dim_y) 
-    // for (uint block_idx_x = start_block_idx_x; block_idx_x < lastBlockIdxX; block_idx_x += grid_dim_x) 
     const uint block_idx_z = new_block_idx.z;
     ThreadblockSwizzle threadblock_swizzle;
-    // if (threadIdx.x == 0 && !isProducerOrConsumer) printf("476: rowSyncOrTileSync\n");
 
     // Compute threadblock location
     cutlass::gemm::GemmCoord threadblock_tile_offset =
         threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z);
 
+    // We do not need this anymore 
     // Early exit if CTA is out of range
     // if (params.grid_tiled_shape.m() <= threadblock_tile_offset.m() ||
     //   params.grid_tiled_shape.n() <= threadblock_tile_offset.n()) {

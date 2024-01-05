@@ -208,7 +208,7 @@ public:
 
   void incrementIter() {iter += 1;}
 
-  CUSYNC_DEVICE 
+  CUSYNC_DEVICE_HOST 
   CuStage(): iter(1) {}
   
   /*

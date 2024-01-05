@@ -47,8 +47,6 @@
 // #define AVOID_WAIT_KERNEL
 
 // #if defined(TILESYNC) || defined(TILEBATCH)
-// #define AVOID_CUSTOM_ORDER
-// #define AVOID_WAIT_KERNEL
 // #endif 
 
 #include<cusync/cusync.h>
@@ -74,16 +72,33 @@ const uint Opts =
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
-using ShapeThreadBlock1 = cutlass::gemm::GemmShape<256, 256, 32>;
-using ShapeWarp1 = cutlass::gemm::GemmShape<128, 64, 32>;
+using ShapeThreadBlock1 = cutlass::gemm::GemmShape<64, 128, 64>;
+using ShapeWarp1 = cutlass::gemm::GemmShape<64, 64, 64>;
 
-using ShapeThreadBlock2 = cutlass::gemm::GemmShape<256, 256, 32>;
-using ShapeWarp2 = cutlass::gemm::GemmShape<128, 64, 32>;
+using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 128, 64>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<16, 64, 64>;
+
+const int NumStages1 = 3;
+const int NumStages2 = 3;
 #else
 //<eval tiles>
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;  
 using ShapeMMAWarp = cutlass::gemm::GemmShape<32, 64, 32>;
 //</eval tiles>
+#endif
+
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
+#if __CUDA_ARCH_LIST__ == 700
+using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 4>;  
+using SmArch = cutlass::arch::Sm70;
+#elif __CUDA_ARCH_LIST__ == 800
+using ShapeMMAOp = cutlass::gemm::GemmShape<16, 8, 16>;  
+using SmArch = cutlass::arch::Sm80;
+#else
+#pragma message "Invalid CUDA ARCH" XSTR(__CUDA_ARCH__)
+#error "Invalid CUDA ARCH"
 #endif
 
 template<typename TileOrder, uint GridN, uint TileM, uint TileN, uint stride>
@@ -132,7 +147,6 @@ struct StridedSync {
 
 const uint GLURowTile = 8;
 
-using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 4>;  
 
 //Element types of A, B, and C
 using ElementAccumulator = float;
@@ -148,8 +162,6 @@ using LayoutOutput = cutlass::layout::RowMajor;
 
 //Use FP-16 Tensor Cores
 using MMAOp = cutlass::arch::OpClassTensorOp;
-
-using SmArch = cutlass::arch::Sm70;
 
 #ifdef EVAL_TILE_SIZES
   //During evaluation apply correct epilogue op
@@ -178,7 +190,7 @@ using EpilogueOp2 = cutlass::epilogue::thread::LinearCombination<
     ElementAccumulator,
     ElementComputeEpilogue>;
 
-template<typename EpilogueOp, typename ShapeThreadBlock, typename ShapeWarp, bool splitK>
+template<typename EpilogueOp, typename ShapeThreadBlock, typename ShapeWarp, int NumStages, bool splitK>
 class BaseMLPGemm : public cutlass::gemm::device::Gemm<ElementInputA, LayoutInputA, 
                                                        ElementInputB, LayoutInputB,
                                                        ElementOutput, LayoutOutput,
@@ -187,18 +199,18 @@ class BaseMLPGemm : public cutlass::gemm::device::Gemm<ElementInputA, LayoutInpu
                                                        ShapeWarp, ShapeMMAOp,
                                                        EpilogueOp, 
                                                        cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle,
-                                                       2, 8, 8, splitK> {};
+                                                       NumStages, 8, 8, splitK> {};
 // Baseline GeMMs
-using Gemm1 = BaseMLPGemm<EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, false>;
-using Gemm2 = BaseMLPGemm<EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, false>;
+using Gemm1 = BaseMLPGemm<EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, NumStages1, false>;
+using Gemm2 = BaseMLPGemm<EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, NumStages2, false>;
 
 //Baseline GeMMs with SplitK enabled
-using GemmSplitK1 = BaseMLPGemm<EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, true>;
-using GemmSplitK2 = BaseMLPGemm<EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, true>;
+using GemmSplitK1 = BaseMLPGemm<EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, NumStages1, true>;
+using GemmSplitK2 = BaseMLPGemm<EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, NumStages2, true>;
 
 //CuSync GeMMs
 using CuSyncGeMMSwizzle = cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle;
-template<typename CuStage, typename EpilogueOp, typename ShapeThreadBlock, typename ShapeWarp, bool splitK>
+template<typename CuStage, typename EpilogueOp, typename ShapeThreadBlock, typename ShapeWarp, int NumStages, bool splitK>
 class CuSyncMLPGemm : public cutlass::gemm::device::CuSyncGemm<CuStage, ElementInputA, LayoutInputA, 
                                                                ElementInputB, LayoutInputB,
                                                                ElementOutput, LayoutOutput,
@@ -207,13 +219,13 @@ class CuSyncMLPGemm : public cutlass::gemm::device::CuSyncGemm<CuStage, ElementI
                                                                ShapeWarp, ShapeMMAOp,
                                                                EpilogueOp, 
                                                                CuSyncGeMMSwizzle,
-                                                               2, 8, 8, splitK> {};
+                                                               NumStages, 8, 8, splitK> {};
 
-using CuSyncGemm1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, false>;
-using CuSyncGemm2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, false>;
+using CuSyncGemm1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, NumStages1, false>;
+using CuSyncGemm2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, NumStages2, false>;
 
-using CuSyncGemmSplitK1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, true>;
-using CuSyncGemmSplitK2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, true>;
+using CuSyncGemmSplitK1 = CuSyncMLPGemm<ProdCuStage, EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, NumStages1, true>;
+using CuSyncGemmSplitK2 = CuSyncMLPGemm<ConsCuStage, EpilogueOp2, ShapeThreadBlock2, ShapeWarp2, NumStages2, true>;
 
 using HostTensor = cutlass::HostTensor<ElementInputA, LayoutInputA>;
 
@@ -260,9 +272,10 @@ struct MLPParameters {
       gemm_size1 = cutlass::gemm::GemmCoord(batch, 4*12288/8, 12288);
       gemm_size2 = cutlass::gemm::GemmCoord(batch, 12288, 4*12288/8);
     } else if (model=="llama") {
-      int d = ((8192/3 + 127)/128)*128;
-      gemm_size1 = cutlass::gemm::GemmCoord(batch, 2*d, 8192);
-      gemm_size2 = cutlass::gemm::GemmCoord(batch, 8192, d);
+      int H = 8192;
+      int d = ((H/3 + 127)/128)*128;
+      gemm_size1 = cutlass::gemm::GemmCoord(batch, 2*d, H);
+      gemm_size2 = cutlass::gemm::GemmCoord(batch, H, d);
     }
     std::cout << "GeMM 1 Size: " << gemm_size1.m() << ", " << 
       gemm_size1.n() << ", " << gemm_size1.k() << std::endl;
@@ -469,25 +482,37 @@ cudaError_t runBaselineGPT3(int split_k1, int split_k2,
   cudaStream_t stream2;
   CUDA_CHECK(cudaStreamCreate(&stream2));
 
+  cudaEvent_t start, end, middle;
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&end));
+  CUDA_CHECK(cudaEventCreate(&middle));
+
   //Run kernels
   for (int r = 0; r < iters; r++) {    
-    double start = timeInMicroSeconds();
+    CUDA_CHECK(cudaEventRecord(start, stream));
     status = gemm_op1(stream);
     CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaStreamSynchronize(stream));
-    double middle1 = timeInMicroSeconds();
-    double iterMatMul1 = middle1-start;
-    matmul1Time += iterMatMul1;
-    status = gemm_op2(stream2);
+    CUDA_CHECK(cudaEventRecord(middle, stream));
+
+    status = gemm_op2(stream);
     CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double middle3 = timeInMicroSeconds();
-    double iterMatmul2 = middle3-middle1;
-    matmul2Time += iterMatmul2;
-    double end = timeInMicroSeconds();
-    if (iters > 10)
-      printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf}\n",end-start,iterMatMul1, iterMatmul2);
-    execTime += end-start;
+    CUDA_CHECK(cudaEventRecord(end, stream));
+    CUDA_CHECK(cudaEventSynchronize(end));
+
+    float iterMatMul1 = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul1, start, middle));
+    matmul1Time += iterMatMul1;
+    float iterMatMul2 = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul2, middle, end));
+    matmul2Time += iterMatMul2;
+
+    float end_to_start = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&end_to_start, start, end));
+
+    if (iters == 20)
+      printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf}\n", 
+             end_to_start * 1000.0f, iterMatMul1*1000.0f, iterMatMul2*1000.0f);
+    execTime += end_to_start * 1000.0f;
   }
 
   return cudaSuccess;
@@ -578,34 +603,39 @@ cudaError_t runBaselineLLaMA(int split_k1, int split_k2,
   execTime = 0; 
 
   //Run kernels
+  cudaEvent_t start, end, middle;
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&end));
+  CUDA_CHECK(cudaEventCreate(&middle));
   for (int r = 0; r < iters; r++) {    
-    double start = timeInMicroSeconds();
+    CUDA_CHECK(cudaEventRecord(start, stream1));
     status = gemm_opXVW1(stream1);
     CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double middle1 = timeInMicroSeconds();
-    double iterMatMul1 = middle1-start;
-    matmul1Time += iterMatMul1;
+
+    CUDA_CHECK(cudaEventRecord(middle, stream1));
 
     //glu
     // gluKernel<half, ((8192/3+127)/128)*128><<<mlpParams.gemm_size1.m(), 
     //                                           ShapeMMAThreadBlock::kN, 0, stream1>>>
     //   ((half*)mlpParams.xvw1.device_data(), (half*)mlpParams.glu.device_data());
     // CUDA_CHECK(cudaDeviceSynchronize());
-    double middle2 = timeInMicroSeconds();
-    double iterMatMul2 = middle2-middle1;
+    status = gemm_opXW12(stream1);
+    CUDA_CHECK(cudaEventRecord(end, stream1));
+    CUDA_CHECK(cudaEventSynchronize(end));
+
+    float iterMatMul1 = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul1, start, middle));
+    matmul1Time += iterMatMul1;
+    float iterMatMul2 = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul2, middle, end));
     matmul2Time += iterMatMul2;
 
-    status = gemm_opXW12(stream1);
-    CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double middle3 = timeInMicroSeconds();
-    double iterMatmul3 = middle3-middle2;
-    matmul3Time += iterMatmul3;
-    double end = timeInMicroSeconds();
+    float end_to_start = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&end_to_start, start, end));
+    
     if (iters > 10)
-      printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf, \"matmul3Time\": %lf}\n",end-start, iterMatMul1, iterMatMul2, iterMatmul3);
-    execTime += end-start;
+      printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf}\n",end_to_start*1000.0f, iterMatMul1*1000.0f, iterMatMul2*1000.0f);
+    execTime +=end_to_start*1000.0f;
   }
 
   return cudaSuccess;
@@ -682,22 +712,28 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   CUTLASS_CHECK(status);
 
   execTime = 0;
-  
+  cudaEvent_t start, end;
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&end));
+
   for (int r = 0; r < iters; r++) {
-    double start = timeInMicroSeconds();
+    CUDA_CHECK(cudaEventRecord(start, producer_stream));
     status = gemm_op1.run(true, NULL, producer_stream);
     CUTLASS_CHECK(status);
-
+    // CUDA_CHECK(cudaDeviceSynchronize());
     // CUDA_CHECK(cudaDeviceSynchronize());
     prod.invokeWaitKernel(consumer_stream);  
-
+    // CUDA_CHECK(cudaDeviceSynchronize());
     status = gemm_op2.run(true, NULL, consumer_stream);
+    CUDA_CHECK(cudaEventRecord(end, consumer_stream));
+    CUDA_CHECK(cudaEventSynchronize(end));
     CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double end = timeInMicroSeconds();
+    float time_ms = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
+    
     if (iters > 10)
-      printf("{\"Total\": %lf}\n",end-start);
-    execTime += end-start;
+      printf("{\"Total\": %lf}\n",time_ms*1000.0f);
+    execTime += time_ms*1000.0f;
     prod.incrementIter();
     cons.incrementIter();
     gemm_op2.params_.custage.incrementIter();
@@ -792,9 +828,12 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
   CUTLASS_CHECK(status);
 
   execTime = 0;
-  
+  cudaEvent_t start, end;
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&end));
   for (int r = 0; r < iters; r++) {
-    double start = timeInMicroSeconds();
+    // double start = timeInMicroSeconds();
+    CUDA_CHECK(cudaEventRecord(start, streams[0]));
     status = gemm_opXVW1.run(true, NULL, streams[0]);
     CUTLASS_CHECK(status);
 
@@ -807,14 +846,19 @@ cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
   
     // mid.invokeWaitKernel(streams[2]);
   
-    status = gemm_opXW12.run(true, NULL, streams[2]);
+    status = gemm_opXW12.run(true, NULL, streams[1]);
     CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaEventRecord(end, streams[1]));
+    CUDA_CHECK(cudaEventSynchronize(end));
+    float time_ms = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
+    // CUDA_CHECK(cudaDeviceSynchronize());
 
-    double end = timeInMicroSeconds();
-    if (iters > 10)
-      printf("{\"Total\": %lf}\n",end-start);
-    execTime += end-start;
+    // double end = timeInMicroSeconds();
+    if (iters > 10) {
+      printf("{\"Total\": %lf}\n",time_ms*1000.0f);
+      execTime += time_ms*1000.0f;
+    }
     prod.incrementIter();
     cons.incrementIter();
     gemm_opXW12.params_.custage.incrementIter();
@@ -854,17 +898,18 @@ int run(int argc, char* argv[]) {
     return -1;
   }
 
-  if (props.major != 7) {
-    std::cerr << "Volta Tensor Ops must be run on a machine"
-              << "with compute capability of 70, 72, or 75."
-              << std::endl;
-    return 0;
-  }
+  // if (props.major != 7) {
+  //   std::cerr << "Volta Tensor Ops must be run on a machine"
+  //             << "with compute capability of 70, 72, or 75."
+  //             << std::endl;
+  //   return 0;
+  // }
   
-  const uint NUM_ARGS = 5;
-  std::string argNames[NUM_ARGS] = {"--model", "--batch", "--check", "--split-k1", "--split-k2"};
+  const uint NUM_ARGS = 6;
+  std::string argNames[NUM_ARGS] = {"--model", "--batch", "--check", "--split-k1", "--split-k2", "--policy"};
   std::string argHelp[NUM_ARGS] = {"GPT3 or LLaMa", "Batch size", "Check results", 
-                                   "Split K for first GeMM", "Split K for second GeMM"};
+                                   "Split K for first GeMM", "Split K for second GeMM",
+                                   "Policy to execute"};
   
   if (argc < NUM_ARGS+1) {
     std::cout << "usage: " << std::endl
@@ -872,11 +917,12 @@ int run(int argc, char* argv[]) {
               << argNames[1] << " <int>" << argHelp[1] << std::endl
               << argNames[2] << " true|false" << argHelp[2] << std::endl
               << argNames[3] << " <int> " << argHelp[3] << std::endl
-              << argNames[4] << " <int> " << argHelp[4] << std::endl;
+              << argNames[4] << " <int> " << argHelp[4] << std::endl
+              << argNames[5] << " baseline|cusync" << argHelp[5] << std::endl;
     return 0;
   }
 
-  std::string model = "";
+  std::string model = "", policy = "";
   uint batch = 0;
   bool doChecking = false;
   uint split_k1 = 1;
@@ -907,6 +953,9 @@ int run(int argc, char* argv[]) {
     } else if (arg.find(argNames[4]) == 0) {
       split_k2 = atoi(argv[i+1]);
       i=i+1;
+    } else if (arg.find(argNames[5]) == 0) {
+      policy = std::string(argv[i+1]);
+      i=i+1;
     }
   }
 
@@ -915,7 +964,7 @@ int run(int argc, char* argv[]) {
     return 0;
   }
     
-  std::cout << "model=" << model << " batch=" << batch << " check="<<doChecking <<std::endl;
+  std::cout << "model=" << model << " batch=" << batch << " check="<<doChecking << " policy= " << policy << std::endl;
 
   cudaStream_t producer_stream;
   cudaStream_t producer_stream2;
@@ -931,7 +980,7 @@ int run(int argc, char* argv[]) {
   
   cudaError_t result;
   int epochs = 20;
-  int warmup = 5;
+  int warmup = 10;
 
   if (doChecking) {
     //Run our reference MLP
@@ -947,6 +996,7 @@ int run(int argc, char* argv[]) {
   double softmaxTime = 0;
   double matmul2Time = 0;
 
+  if (policy == "baseline") {
   if (mlpParams.isGPT3()) {
     result = runBaselineGPT3(split_k1, split_k2, mlpParams, producer_stream, 
                              baselineTime, matmul1Time, softmaxTime, matmul2Time, 1);
@@ -994,6 +1044,7 @@ int run(int argc, char* argv[]) {
     printf("END-BASELINE:\n");
     printf("Average time %lf microseconds\n", baselineTime/(float)epochs);
   }
+  }
 
   
   if (doChecking) {
@@ -1031,6 +1082,7 @@ int run(int argc, char* argv[]) {
   }
   
   //Run cusync mlp
+  if (policy == "cusync") {
   if (mlpParams.isGPT3()) {
     ProdCuStage prod(CuSyncGeMMSwizzle().get_grid_shape(gridDim1), {1,1,1}, NoSync(), sync);
     ConsCuStage cons(CuSyncGeMMSwizzle().get_grid_shape(gridDim2), {1,1,1}, sync, NoSync());
@@ -1089,6 +1141,7 @@ int run(int argc, char* argv[]) {
     printf("END-OVERLAPPED:\n");
     
     printf("Average time %lf microseconds\n", overlapTime/(float)epochs);
+  }
   }
 
   return 0;

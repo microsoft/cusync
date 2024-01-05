@@ -1,6 +1,6 @@
 include ../common.mk
 
-ARCH_FLAGS=-gencode=arch=compute_70,code=[sm_70,compute_70]
+ARCH_FLAGS=-gencode=arch=compute_70,code=[sm_70,compute_70] -gencode=arch=compute_80,code=[sm_80,compute_80]
 INCLUDES=-I$(NV_CUTLASS)/include -I$(NV_CUTLASS)/examples/common -I$(NV_CUTLASS)/tools/util/include -I$(CUSYNC_CUTLASS)/include/ -I$(CUSYNC) -I.
 
 DEFINES=-DCUTLASS_ENABLE_CUBLAS=1 -DCUTLASS_NAMESPACE=cutlass -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DCUTLASS_TEST_LEVEL=0 -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1 -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1 -DCUTLASS_DEBUG_TRACE_LEVEL=0
