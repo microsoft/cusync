@@ -60,6 +60,14 @@ def buildDir(f):
 if not os.path.exists(buildDir("")):
   os.mkdir(buildDir(""))
 
+def resultsDir(f):
+  '''Results directory'''
+  return 'results/'+f
+
+'''Make results directory if not exists'''
+if not os.path.exists(resultsDir("")):
+  os.mkdir(resultsDir(""))
+
 def getStreamKTimes(output):
   runtime = re.findall(r'\s*Avg runtime: ([\d\.]+)', output)
   return float(runtime[0])
@@ -207,6 +215,8 @@ else:
   #cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
   cases = [(512,1),(512,2), (512,4), (1024,1), (1024,2), (1024,4), (2048,1), (2048,2), (2048,4)]
 
+results_csv = ""
+
 for case in cases:
   if attention_or_mlp == "attention":
     m = case[1]
@@ -306,7 +316,9 @@ for case in cases:
     bTimeTotal = baselinetimes["Total"]
     bTimeMatmul1 = baselinetimes["matmul1Time"]
     bTimeMatmul2 = baselinetimes["matmul2Time"]
-    print(f'{m} & {seq} & {H} & baseline & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)}')
+    result_row = f'{m} & {seq} & {H} & baseline & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)}'
+    results_csv += result_row + "\n"
+    print(result_row)
     baselineDone = True
 
   for syncPolicy in policies:
@@ -329,4 +341,9 @@ for case in cases:
       overlaptimes  = getAllTimes(o, 'START-OVERLAPPED', 'END-OVERLAPPED')
       otime = overlaptimes["Total"]
 
-    print(f'{m} & {seq} & {H} & {syncPolicy} & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)} & {"%.2f"%avg(otime)} & {"%.2f"%stdev(otime)} & {"%.2f"%(100 - avg(otime)/avg(bTimeTotal)*100)}')
+    result_row = f'{m} & {seq} & {H} & {syncPolicy} & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)} & {"%.2f"%avg(otime)} & {"%.2f"%stdev(otime)} & {"%.2f"%(100 - avg(otime)/avg(bTimeTotal)*100)}'
+    results_csv += result_row + "\n"
+    print(result_row)
+
+with open(os.path.join(resultsDir(""), f"{attention_or_mlp}-{model}-{arch}.csv"), "w") as f:
+  f.write(results_csv)
