@@ -85,3 +85,6 @@ cons.incrementIter();
 Tests
 ------
 Run tests using `make run-simple-test`
+
+
+![alt text](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-a100.png?raw=true)

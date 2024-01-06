@@ -72,14 +72,14 @@ const uint Opts =
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
-using ShapeThreadBlock1 = cutlass::gemm::GemmShape<64, 128, 64>;
-using ShapeWarp1 = cutlass::gemm::GemmShape<64, 64, 64>;
+using ShapeThreadBlock1 = cutlass::gemm::GemmShape<256, 128, 32>;
+using ShapeWarp1 = cutlass::gemm::GemmShape<64, 64, 32>;
 
-using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 128, 64>;
-using ShapeWarp2 = cutlass::gemm::GemmShape<16, 64, 64>;
+using ShapeThreadBlock2 = cutlass::gemm::GemmShape<256, 128, 32>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<64, 64, 32>;
 
-const int NumStages1 = 3;
-const int NumStages2 = 3;
+const int NumStages1 = 5;
+const int NumStages2 = 5;
 #else
 //<eval tiles>
 using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<32, 256, 32>;  
