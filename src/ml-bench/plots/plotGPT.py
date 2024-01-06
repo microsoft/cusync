@@ -17,7 +17,7 @@ mInd = 0
 seqInd = 1
 hInd = 2
 syncTypeInd = 3
-streamkInd = 7 if model == 'llama' and attention_or_mlp == 'mlp' else 6
+streamkInd = 4
 torchInd = 4
 baselineInd = 4
 stdevBaselineInd = 5
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     rowSpeedup = (baseline - rowOverlap)/baseline*100
     tileSpeedup = (baseline - tileOverlap)/baseline*100
     streamKSpeedup = (baseline - streamK)/baseline*100
-
+    print(streamKSpeedup)
     for i in range(len(rowSpeedup)):
         if rowSpeedup[i] < -2:
             rowSpeedup[i]= -2
@@ -156,9 +156,10 @@ if __name__ == "__main__":
     #     plt.yticks([0.6+0.1*i for i in range(0, 7)])
     # else:
     ax2.margins(0.02)
-    plt.ylim(-5, 30)
-    plt.yticks(ticks=[-5+5*i for i in range(0, 8)],
-               labels=["%d%%"%(-5+5*i) for i in range(0, 8)])
+    max_speedup = max([np.amax(rowSpeedup), np.amax(tileSpeedup), np.amax(streamKSpeedup)])
+    plt.ylim(-5, (((max_speedup+10-1)//10)*10))
+    # plt.yticks(ticks=[-5+5*i for i in range(0, 8)],
+    #            labels=["%d%%"%(-5+5*i) for i in range(0, 8)])
     # ax2.yaxis.set_major_formatter(mtick.PercentFormatter(decimals=None))
     # ax2.set_yticklabels(["%d%%"%(-5+5*i) for i in range(0, 9)])
     # plt.yticks(["%d%(-5+5*i) for i in range(0, 7)])
@@ -176,7 +177,7 @@ if __name__ == "__main__":
         ax2.get_xaxis().set_label_coords(0.45,-0.4)
         plt.legend((p1[0], p2[0], p4[0]), 
                    ('RowSync', 'TileSync', 'StreamK'),
-                   loc='upper left', bbox_to_anchor=(-0.01, 1.16),
+                   loc='upper left', bbox_to_anchor=(-0.25, 1.20),
                    ncol=4,columnspacing=1,handlelength=1.7)
     else:
         ax2.get_yaxis().set_visible(False)

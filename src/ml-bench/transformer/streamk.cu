@@ -128,15 +128,14 @@ using         LayoutC     = cutlass::layout::RowMajor;                      // L
 constexpr int AlignmentC  = 128 / cutlass::sizeof_bits<ElementC>::value;    // Memory access granularity/alignment of C/D matrices in units of elements (up to 16 bytes)
 
 // Multiply-accumulate blocking/pipelining details
-using ElementAccumulator  = cutlass::half_t;                          // Element type for internal accumulation
-using ArchTag             = cutlass::arch::Sm80;                      // Tag indicating the minimum SM that supports the intended feature
+using ElementAccumulator  = float;                          // Element type for internal accumulation
 using OperatorClass       = cutlass::arch::OpClassTensorOp;           // Operator class tag
 
 
 #ifndef EVAL_TILE_SIZES
 
-using ShapeMMAThreadBlock    = cutlass::gemm::GemmShape<256, 128, 64>;   // Threadblock-level tile size (concept: GemmShape)
-using ShapeMMAWarp           = cutlass::gemm::GemmShape<64, 64, 64>;     // Warp-level tile size (concept: GemmShape)
+using ShapeMMAThreadBlock    = cutlass::gemm::GemmShape<128, 128, 32>;   // Threadblock-level tile size (concept: GemmShape)
+using ShapeMMAWarp           = cutlass::gemm::GemmShape<64, 64, 32>;     // Warp-level tile size (concept: GemmShape)
 constexpr int NumStages   = 3;                                        // Number of global->shared pipeline stages used in the GEMM mainloop
 #else
 //<eval tiles>
@@ -159,7 +158,11 @@ using SmArch = cutlass::arch::Sm80;
 
 
 // Epilogue output operator
+#if defined(MLP_GPT3_GEMM1)
+using EpilogueOp = cutlass::epilogue::thread::LinearCombinationGELU<
+#else
 using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
+#endif
     ElementC,               // Element type for C and D matrix operands
     AlignmentC,             // Memory access granularity of C and D matrix in units of elements
     ElementAccumulator,     // Element type from internal accumaccumulation
@@ -183,7 +186,7 @@ using DeviceGemmBasic = cutlass::gemm::device::GemmUniversal<
     ElementC, LayoutC,
     ElementAccumulator,
     OperatorClass,
-    ArchTag,
+    SmArch,
     ShapeMMAThreadBlock,
     ShapeMMAWarp,
     ShapeMMAOp,
@@ -200,7 +203,7 @@ using DeviceGemmStreamK = cutlass::gemm::device::GemmUniversal<
     ElementC, LayoutC,
     ElementAccumulator,
     OperatorClass,
-    ArchTag,
+    SmArch,
     ShapeMMAThreadBlock,
     ShapeMMAWarp,
     ShapeMMAOp,

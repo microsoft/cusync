@@ -10,7 +10,7 @@ $(BUILD)/streamk: streamk.cu $(CUSYNC_SRC_FILES)
 	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG $< $(CUSYNC_SRC_FILES) -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3
 
 $(BUILD)/streamk-eval: $(BUILD)/streamk-eval.cu $(CUSYNC_SRC_FILES)
-	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG $< $(CUSYNC_SRC_FILES) -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3
+	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG $< $(CUSYNC_SRC_FILES) -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3 -DEVAL_TILE_SIZES
 
 $(BUILD)/mlp-batchedrow: mlp.cu common.h $(CUSYNC_SRC_FILES)
 	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG $< $(CUSYNC_SRC_FILES) -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3 -DBATCHEDROW

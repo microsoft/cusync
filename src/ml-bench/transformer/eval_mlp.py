@@ -72,23 +72,26 @@ def getStreamKTimes(output):
   runtime = re.findall(r'\s*Avg runtime: ([\d\.]+)', output)
   return float(runtime[0])
 
-def genAndMakeStreamK(batchInfo):
+def genAndMakeStreamK(batchInfo, gemmidx):
   inFile = "streamk.cu"
   outFile = buildDir("streamk-eval.cu")
   tilesCode = """using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<%d, %d, %d>;  
 using ShapeMMAWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
   tileSize = batchInfo[syncPolicy]["TileSizes"] if "TileSizes" in batchInfo["baseline"] else  batchInfo["TileSizes"]
   if len(tileSize) > 1:
-    tilesCode = tilesCode % tuple(batchInfo["TileSizes"][0])
+    tilesCode = tilesCode % tuple(batchInfo["TileSizes"][gemmidx])
   else:
     tilesCode = tilesCode % tuple(batchInfo["TileSizes"])
 
   NumStages = batchInfo[syncPolicy]["NumStages"] if "NumStages" in batchInfo["baseline"] else  batchInfo["NumStages"]
   if isinstance(NumStages, list):
-    NumStages = NumStages[0]
+    NumStages = NumStages[gemmidx]
 
   numStagesCode = "const uint NumStages = %d;\n" % NumStages
   tilesCode += numStagesCode
+
+  if model == "gpt3" and attention_or_mlp == "mlp" and gemmidx == 0:
+    tilesCode += "#define MLP_GPT3_GEMM1"
 
   fileContents = slurp(inFile)
   tilesCodeStart = fileContents.find("//<eval tiles>") + len("//<eval tiles>")
@@ -222,7 +225,7 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
 if attention_or_mlp == "mlp":
-  cases = [1,2,4,8,64,128,256,512,768,1024,1280,1536,1792,2048]
+  cases = [768,1024,1280,1536,1792,2048] #[1,2,4,8,16,32,64,128,256,512]
 else:
   #cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
   cases = [(512,1),(512,2), (512,4), (1024,1), (1024,2), (1024,4), (2048,1), (2048,2), (2048,4)]
@@ -258,15 +261,15 @@ for case in cases:
     print(f'{m} & {H} & {"pytorch"} & {"%.2f"%float(ctime)}')
   
   if True:
-    genAndMakeStreamK(tiles[m])
+    genAndMakeStreamK(tiles[m], 0)
     streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
-    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
+    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(2*FFN if model=='llama' else FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
     if s != 0:
       print("StreamK Error")
       print(o)
 
     firstGeMMStreamK = getStreamKTimes(o)
-
+    genAndMakeStreamK(tiles[m], 1)
     (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={H} --k={int(FFN)} " + f"--split={tiles[m]['baseline']['split_ks'][1]}")
     if s != 0:
       print("StreamK Error")
@@ -274,7 +277,7 @@ for case in cases:
 
     secondGeMMStreamK = getStreamKTimes(o)
     total = firstGeMMStreamK + secondGeMMStreamK
-    result_row = f'{m} & {seq} & {H} & {"streamk"} & {"%.2f"%(firstGeMMStreamK*1000)} & {"%.2f"%(secondGeMMStreamK*1000)} & {"%.2f"%(total*1000)}'
+    result_row = f'{m} & {seq} & {H} & {"streamk"} & {"%.2f"%(total*1000)} & {"%.2f"%(firstGeMMStreamK*1000)} & {"%.2f"%(secondGeMMStreamK*1000)}'
     print(result_row)
     results_csv += result_row + "\n"
 

@@ -18,4 +18,4 @@ mlp-llama-a100: $(TRANSFORMER_RESULTS)/$$@.csv
 all: mlp-gpt3-v100 mlp-gpt3-a100.pdf mlp-llama-v100.pdf mlp-llama-a100.pdf 
 
 clean:
-	rm -rf *.pdf
+	rm -rf *.pdf ; rm -rf *.png
