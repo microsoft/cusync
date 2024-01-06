@@ -135,15 +135,28 @@ using OperatorClass       = cutlass::arch::OpClassTensorOp;           // Operato
 
 #ifndef EVAL_TILE_SIZES
 
-using ThreadblockShape    = cutlass::gemm::GemmShape<256, 128, 32>;   // Threadblock-level tile size (concept: GemmShape)
-using WarpShape           = cutlass::gemm::GemmShape<128, 64, 32>;     // Warp-level tile size (concept: GemmShape)
-using InstructionShape    = cutlass::gemm::GemmShape<8, 8, 4>;      // Instruction-level tile size (concept: GemmShape)
+using ShapeMMAThreadBlock    = cutlass::gemm::GemmShape<256, 128, 64>;   // Threadblock-level tile size (concept: GemmShape)
+using ShapeMMAWarp           = cutlass::gemm::GemmShape<64, 64, 64>;     // Warp-level tile size (concept: GemmShape)
+constexpr int NumStages   = 3;                                        // Number of global->shared pipeline stages used in the GEMM mainloop
 #else
 //<eval tiles>
 //</eval tiles>
 #endif
 
-constexpr int NumStages   = 2;                                        // Number of global->shared pipeline stages used in the GEMM mainloop
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
+#if __CUDA_ARCH_LIST__ == 700
+using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 4>;  
+using SmArch = cutlass::arch::Sm70;
+#elif __CUDA_ARCH_LIST__ == 800
+using ShapeMMAOp = cutlass::gemm::GemmShape<16, 8, 16>;  
+using SmArch = cutlass::arch::Sm80;
+#else
+#pragma message "Invalid CUDA ARCH" XSTR(__CUDA_ARCH__)
+#error "Invalid CUDA ARCH"
+#endif
+
 
 // Epilogue output operator
 using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
@@ -171,9 +184,9 @@ using DeviceGemmBasic = cutlass::gemm::device::GemmUniversal<
     ElementAccumulator,
     OperatorClass,
     ArchTag,
-    ThreadblockShape,
-    WarpShape,
-    InstructionShape,
+    ShapeMMAThreadBlock,
+    ShapeMMAWarp,
+    ShapeMMAOp,
     EpilogueOp,
     cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
     NumStages,
@@ -188,9 +201,9 @@ using DeviceGemmStreamK = cutlass::gemm::device::GemmUniversal<
     ElementAccumulator,
     OperatorClass,
     ArchTag,
-    ThreadblockShape,
-    WarpShape,
-    InstructionShape,
+    ShapeMMAThreadBlock,
+    ShapeMMAWarp,
+    ShapeMMAOp,
     EpilogueOp,
     cutlass::gemm::threadblock::ThreadblockSwizzleStreamK, // <-- Only difference
     NumStages,
@@ -545,19 +558,18 @@ int main(int argc, const char **argv)
   {
     // Compare basic data-parallel version versus StreamK version using default load-balancing heuristics
     // Result basic_dp         = run<DeviceGemmBasic>("Basic data-parallel GEMM", options);
-    Result streamk_default  = run<DeviceGemmStreamK>("StreamK GEMM with default load-balancing", options);
+    // Result streamk_default  = run<DeviceGemmStreamK>("StreamK GEMM with default load-balancing", options);
 
-    printf("StreamK default: %.3f\n", streamk_default.avg_runtime_ms);
+    // printf("StreamK default: %.3f\n", streamk_default.avg_runtime_ms);
 
     // Show that StreamK can emulate basic data-parallel GEMM when we set the number of SMs to load-balance across = 1
-    options.avail_sms       = 1;        // Set loadbalancing width to 1 SM (no load balancing)
-    Result streamk_dp       = run<DeviceGemmStreamK>("StreamK emulating basic data-parallel GEMM", options);
-    options.avail_sms       = -1;       // Reset loadbalancing width to unspecified SMs (i.e., the number of device SMs)
+    // options.avail_sms       = 1;        // Set loadbalancing width to 1 SM (no load balancing)
+    // Result streamk_dp       = run<DeviceGemmStreamK>("StreamK emulating basic data-parallel GEMM", options);
+    // options.avail_sms       = -1;       // Reset loadbalancing width to unspecified SMs (i.e., the number of device SMs)
 
-    printf("StreamK DP: %.3f\n", streamk_dp.avg_runtime_ms);
+    // printf("StreamK DP: %.3f\n", streamk_dp.avg_runtime_ms);
 
-    options.split_k_factor++;     // Increment splitting factor for next evaluation
-
+    // options.split_k_factor++;     // Increment splitting factor for next evaluation
   }
 
   // Show that StreamK can emulate "Split-K" with a tile-splitting factor

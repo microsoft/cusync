@@ -77,7 +77,19 @@ def genAndMakeStreamK(batchInfo):
   outFile = buildDir("streamk-eval.cu")
   tilesCode = """using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<%d, %d, %d>;  
 using ShapeMMAWarp = cutlass::gemm::GemmShape<%d, %d, %d>;"""
-  tilesCode = tilesCode % tuple(batchInfo["TileSizes"])
+  tileSize = batchInfo[syncPolicy]["TileSizes"] if "TileSizes" in batchInfo["baseline"] else  batchInfo["TileSizes"]
+  if len(tileSize) > 1:
+    tilesCode = tilesCode % tuple(batchInfo["TileSizes"][0])
+  else:
+    tilesCode = tilesCode % tuple(batchInfo["TileSizes"])
+
+  NumStages = batchInfo[syncPolicy]["NumStages"] if "NumStages" in batchInfo["baseline"] else  batchInfo["NumStages"]
+  if isinstance(NumStages, list):
+    NumStages = NumStages[0]
+
+  numStagesCode = "const uint NumStages = %d;\n" % NumStages
+  tilesCode += numStagesCode
+
   fileContents = slurp(inFile)
   tilesCodeStart = fileContents.find("//<eval tiles>") + len("//<eval tiles>")
   tilesCodeEnd = fileContents.find("//</eval tiles>")
@@ -245,50 +257,26 @@ for case in cases:
 
     print(f'{m} & {H} & {"pytorch"} & {"%.2f"%float(ctime)}')
   
-  if False:
+  if True:
     genAndMakeStreamK(tiles[m])
-    if model == 'gpt3' or (model == 'llama' and attention_or_mlp == 'attention'):
-      streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
-      (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
-      if s != 0:
-        print("StreamK Error")
-        print(o)
+    streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
+    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
+    if s != 0:
+      print("StreamK Error")
+      print(o)
 
-      firstGeMMStreamK = getStreamKTimes(o)
+    firstGeMMStreamK = getStreamKTimes(o)
 
-      (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={H} --k={int(FFN)} " + f"--split={tiles[m]['baseline']['split_ks'][1]}")
-      if s != 0:
-        print("StreamK Error")
-        print(o)
+    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={H} --k={int(FFN)} " + f"--split={tiles[m]['baseline']['split_ks'][1]}")
+    if s != 0:
+      print("StreamK Error")
+      print(o)
 
-      secondGeMMStreamK = getStreamKTimes(o)
-      total = firstGeMMStreamK + secondGeMMStreamK
-      print(f'{m} & {H} & {"streamk"} & {"%.2f"%(firstGeMMStreamK*1000)} & {"%.2f"%(secondGeMMStreamK*1000)} & {"%.2f"%(total*1000)}')
-    elif model == 'llama' and attention_or_mlp == 'mlp':
-      streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
-      (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
-      if s != 0:
-        print("StreamK Error")
-        print(o)
-
-      firstGeMMStreamK = getStreamKTimes(o)
-
-      (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
-      if s != 0:
-        print("StreamK Error")
-        print(o)
-
-      secondGeMMStreamK = getStreamKTimes(o)
-
-      (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={H} --k={int(FFN)} " + f"--split={tiles[m]['baseline']['split_ks'][1]}")
-      if s != 0:
-        print("StreamK Error")
-        print(o)
-
-      thirdGeMMStreamK = getStreamKTimes(o)
-      total = firstGeMMStreamK + secondGeMMStreamK + thirdGeMMStreamK
-      print(f'{m} & {H} & {"streamk"} & {"%.2f"%(firstGeMMStreamK*1000)} & {"%.2f"%(secondGeMMStreamK*1000)} & {"%.2f"%(thirdGeMMStreamK*1000)} & {"%.2f"%(total*1000)}')
-    continue
+    secondGeMMStreamK = getStreamKTimes(o)
+    total = firstGeMMStreamK + secondGeMMStreamK
+    result_row = f'{m} & {seq} & {H} & {"streamk"} & {"%.2f"%(firstGeMMStreamK*1000)} & {"%.2f"%(secondGeMMStreamK*1000)} & {"%.2f"%(total*1000)}'
+    print(result_row)
+    results_csv += result_row + "\n"
 
   baselineDone = False
   bTimeTotal = 0

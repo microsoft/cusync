@@ -78,17 +78,16 @@ rowIdx = 0
 while rowIdx < len(data):
     # print(rowIdx)
     row = data[rowIdx]
-    m += [int(row[mInd])]
     i = 0
-    while rowIdx < len(data) and i < (5 if attention_or_mlp == 'mlp' else 6):
+    while rowIdx < len(data) and i < (4 if attention_or_mlp == 'mlp' else 6):
         row = data[rowIdx]
         if row[syncTypeInd] == 'streamk':
             streamK += [float(row[streamkInd])]
         elif row[syncTypeInd] == 'rowsync':
             rowOverlap += [float(row[overlapInd])]
         elif row[syncTypeInd] == 'baseline':
+            m += [int(row[mInd])]
             baseline += [float(row[baselineInd])]
-            streamK += [float(row[streamkInd])]
         elif row[syncTypeInd] == 'tilesync':
             tileOverlap += [float(row[overlapInd])]
         elif row[syncTypeInd] == 'stridedsync':
@@ -109,12 +108,13 @@ if __name__ == "__main__":
     rowOverlap = np.array(rowOverlap)
     stdevRowOverlap = np.array(stdevRowOverlap)
     tileOverlap = np.array(tileOverlap)
+    streamK = np.array(streamK)
     stdevTileOverlap = np.array(stdevTileOverlap)
     analyticalOverlapTimes = np.array(analyticalOverlapTimes)
 
     rowSpeedup = (baseline - rowOverlap)/baseline*100
     tileSpeedup = (baseline - tileOverlap)/baseline*100
-    streamKSpeedup = tileSpeedup/2
+    streamKSpeedup = (baseline - streamK)/baseline*100
 
     for i in range(len(rowSpeedup)):
         if rowSpeedup[i] < -2:
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     plt.axhline(0, color='black', ls='dotted')
     # plt.yticks(np.arange(0, 1.25, 0.25))
     if attention_or_mlp == "mlp":
-        xt = list((2**i for i in range(0, len(ind))))
+        xt = list(m)
         plt.xticks(ind, xt, rotation=90)
         
         plt.ylabel('Improvement over \nCUDA Stream Sync')

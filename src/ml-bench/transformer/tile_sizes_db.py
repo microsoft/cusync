@@ -844,25 +844,25 @@ llama_attention_v100 = {
   }
 
 gpt3_mlp_a100 = {
-  2048: {"TileSizes" : [[256, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
-    "NumStages" : "3",
+  2048: {"TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
+    "NumStages" : 3,
     "baseline": {"split_ks": [1,1]},
     "rowsync": {
       "TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
       "split_ks": [1,1],
-      "NumStages" : "3",
+      "NumStages" : 3,
     },
     "tilesync": {"split_ks": [1,1],
                 "TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
                   "split_ks": [1,1],
-                  "NumStages" : "3",
+                  "NumStages" : 3,
                 "AvoidCustomOrder": False,
                 "AvoidWaitKernel": False,
                 "ReorderTileLoads": True,
                 "NoAtomicAdd": True}
   },
   1792: {"TileSizes" : [[256, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
-    "NumStages" : "5",
+    "NumStages" : 5,
     "baseline": {"split_ks": [2,1]},
     "rowsync": {"split_ks": [2,1]},
     "tilesync": {"split_ks": [2,1],
@@ -872,7 +872,7 @@ gpt3_mlp_a100 = {
                 "NoAtomicAdd": True}
   },
   1536: {"TileSizes" : [[128, 256, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
-    "NumStages" : "5",
+    "NumStages" : 5,
     "baseline": {"split_ks": [2,1]},
     "rowsync": {"split_ks": [2,1]},
     "tilesync": {"split_ks": [2,1],
@@ -892,7 +892,7 @@ gpt3_mlp_a100 = {
                 "NoAtomicAdd": True}
   },
   1024: {"TileSizes" : [[256, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
-    "NumStages" : "4",
+    "NumStages" : 4,
     "baseline": {"split_ks": [3,1]},
     "rowsync": {"split_ks": [3,1]},
     "tilesync": {"split_ks": [3,1],
@@ -902,7 +902,7 @@ gpt3_mlp_a100 = {
                 "NoAtomicAdd": True}
   },
   768: {"TileSizes" : [[128, 256, 64, 64, 64, 64], [128, 256, 64, 64, 64, 64]],
-    "NumStages" : "3",
+    "NumStages" : 3,
     "baseline": {"split_ks": [3,1]},
     "rowsync": {"split_ks": [4,1]},
     "tilesync": {"split_ks": [4,1],
@@ -912,7 +912,7 @@ gpt3_mlp_a100 = {
                 "NoAtomicAdd": True}
   },
   512: {"TileSizes" : [[128, 256, 64, 64, 64, 64], [128, 256, 64, 64, 64, 64]],
-    "NumStages" : "3",
+    "NumStages" : 3,
     "baseline": {"split_ks": [1,1]},
     "rowsync": {"split_ks": [1,1]},
     "tilesync": {"split_ks": [1,1],
@@ -922,7 +922,7 @@ gpt3_mlp_a100 = {
                 "NoAtomicAdd": True}
   },
   256: {"TileSizes" : [[128, 256, 64, 64, 64, 64], [128, 256, 64, 64, 64, 64]],
-    "NumStages" : "3",
+    "NumStages" : 3,
     "baseline": {"split_ks": [2,1]},
     "rowsync": {"split_ks": [2,1],
                   "AvoidWaitKernel": True,
