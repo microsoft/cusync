@@ -1,15 +1,24 @@
-CuSync 1.0
+CuSync
 ------
 CuSync is a framework to synchronize tile-based CUDA kernels in a fine-grained manner.
 CuSync allows synchronization of dependent tiles, i.e. thread blocks, of a chain of producer and consumer kernels.
 Synchronizing thread blocks instead of kernels allows concurrent execution of independent thread blocks. For more details please read https://arxiv.org/abs/2305.13450.
 
+--------
+
+![alt text](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-a100.png?raw=true)
+![alt text](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-llama-a100.png?raw=true)
+
+![alt text](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-v100.png?raw=true)
+![alt text](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-llama-v100.png?raw=true)
+
+Usage
+-------
+
 Clone the repo and its submodules using `git clone --recurse-submodules https://github.com/parasailteam/cusync.git`.
 
 If already cloned and want to clone submodules, use `git submodule update --init --recursive`.
 
-Usage
--------
 
 ### CUDA code
 Each kernel is associated with a CuStage.
@@ -87,4 +96,3 @@ Tests
 Run tests using `make run-simple-test`
 
 
-![alt text](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-a100.png?raw=true)

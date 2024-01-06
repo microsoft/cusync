@@ -225,7 +225,7 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
 if attention_or_mlp == "mlp":
-  cases = [768,1024,1280,1536,1792,2048] #[1,2,4,8,16,32,64,128,256,512]
+  cases = [1,2,4,8,16,32,64,128,256,512,768,1024,1280,1536,1792,2048]
 else:
   #cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
   cases = [(512,1),(512,2), (512,4), (1024,1), (1024,2), (1024,4), (2048,1), (2048,2), (2048,4)]
@@ -250,7 +250,7 @@ for case in cases:
     if attention_or_mlp == "attention":
       (s, o) = subprocess.getstatusoutput(f"python3 torch-baselines/torchAttention.py {m} {int(H/8)} {H} {H}")
     else:
-      (s, o) = subprocess.getstatusoutput(f"python3 torch-baselines/torchmlp.py {m} {int(FFN)} {H} {H} {model}")
+      (s, o) = subprocess.getstatusoutput(f"python3 torch-baselines/torchmlp.py {m} {model}")
     
     if s == -1:
       print("error " + o)
@@ -258,8 +258,8 @@ for case in cases:
       ctime = o
       cublasTimes[m] = ctime
 
-    print(f'{m} & {H} & {"pytorch"} & {"%.2f"%float(ctime)}')
-  
+    print(f'{m} & {seq} & {H} & {"torch"} & {"%.2f"%float(ctime)}')
+    continue
   if True:
     genAndMakeStreamK(tiles[m], 0)
     streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "

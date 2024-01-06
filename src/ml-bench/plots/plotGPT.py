@@ -3,11 +3,15 @@ import csv
 from common import *
 import math 
 import matplotlib.ticker as mtick
+
 csv_file = sys.argv[1]
 pdf_name = sys.argv[2]
+
 only_one_h = True
 attention_or_mlp = "attention" if ("attention" in csv_file) else "mlp"
 model = "gpt3" if "gpt3" in csv_file else "llama"
+gpu = "a100" if "a100" in csv_file else ("v100" if "v100" in csv_file else "")
+
 only_streamk = False
 if len(sys.argv) > 3 and sys.argv[3] == "only_streamk":
     only_streamk = True
@@ -75,6 +79,25 @@ streamK = []
 stdevstreamk = []
 
 rowIdx = 0
+
+#Time t is in microseconds
+def flops(model, m, t):
+    t = t/1e6
+    if model == "llama":
+        H = 8192
+        FFN = ((H+128-1)//128)*128
+        return (2*(m * 2 * FFN * H + m*FFN*H)/t)/1e12
+    elif model == "gpt3":
+        H = 12288
+        FFN = H/2
+        return (2*(m * FFN * H + m*FFN*H)/t)/1e12
+
+def flops_for_all_rows(model, batches, times):
+    flops_list = []
+    for m,t in zip(batches, times):
+        flops_list += [flops(model, m, t)]
+    return flops_list
+
 while rowIdx < len(data):
     # print(rowIdx)
     row = data[rowIdx]
@@ -95,9 +118,13 @@ while rowIdx < len(data):
         rowIdx += 1
         i += 1
 
+# baseline = flops_for_all_rows(model, m, baseline)
+# streamK = flops_for_all_rows(model, m, streamK)
+# rowOverlap = flops_for_all_rows(model, m, rowOverlap)
+# tileOverlap = flops_for_all_rows(model, m, tileOverlap)
+
 if __name__ == "__main__":
     # secFactor = 1e3 if (secs == "ms") else 1e6
-    print(baseline)
     torchT = np.array(torchT)
     baseline = np.array(baseline)
     ind = np.arange(len(baseline))
@@ -112,9 +139,11 @@ if __name__ == "__main__":
     stdevTileOverlap = np.array(stdevTileOverlap)
     analyticalOverlapTimes = np.array(analyticalOverlapTimes)
 
+    cutlassSpeedup = (baseline - baseline)/baseline*100
     rowSpeedup = (baseline - rowOverlap)/baseline*100
     tileSpeedup = (baseline - tileOverlap)/baseline*100
     streamKSpeedup = (baseline - streamK)/baseline*100
+    
     print(streamKSpeedup)
     for i in range(len(rowSpeedup)):
         if rowSpeedup[i] < -2:
