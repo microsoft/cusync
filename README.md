@@ -11,19 +11,24 @@ More details are available at https://arxiv.org/abs/2305.13450.
 The graphs below shows percentage improvement over GPT3 and LLAMA MLPs using optimized NVIDIA CUTLASS GeMMs on NVIDIA Tesla A100 and NVIDIA Tesla V100 GPUs for GPT3 and LLAMA.
 NVIDIA CUTLASS StreamK is another method to optimize the utilization during the last thread block wave.
 
+#### NVIDIA Tesla A100 SXM4 80GB with CUDA 12.2
 ![](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-a100.png?raw=true)
 ![](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-llama-a100.png?raw=true)
 
-
+#### NVIDIA Tesla V100 SXM2 32GB with CUDA 12.2
 ![a](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-v100.png?raw=true)
 ![a](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-llama-v100.png?raw=true)
 
 ## Usage
 
 #### Clone
-Clone the repo and its submodules using `git clone --recurse-submodules https://github.com/parasailteam/cusync.git`.
+Clone the repo and its submodules using 
 
-If already cloned and want to clone submodules, use `git submodule update --init --recursive`.
+```git clone --recurse-submodules https://github.com/parasailteam/cusync.git```
+
+If already cloned and want to clone submodules, use
+
+```git submodule update --init --recursive```
 
 #### Example
 An example of synchronizing two dependent GeMMs is provided in the `src/example/`. Moreover, there are small tests in `tests/` that can be used as examples.
