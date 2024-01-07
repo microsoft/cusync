@@ -186,9 +186,10 @@ if __name__ == "__main__":
     # else:
     ax2.margins(0.02)
     max_speedup = max([np.amax(rowSpeedup), np.amax(tileSpeedup), np.amax(streamKSpeedup)])
-    plt.ylim(-5, (((max_speedup+10-1)//10)*10))
-    # plt.yticks(ticks=[-5+5*i for i in range(0, 8)],
-    #            labels=["%d%%"%(-5+5*i) for i in range(0, 8)])
+    max_speedup = int(((max_speedup+10-1)//10)*10)
+    plt.ylim(-5, max_speedup)
+    plt.yticks(ticks=[-5+5*i for i in range(0, max_speedup//5+1)],
+               labels=["%d%%"%(-5+5*i) for i in range(0, max_speedup//5 + 1)])
     # ax2.yaxis.set_major_formatter(mtick.PercentFormatter(decimals=None))
     # ax2.set_yticklabels(["%d%%"%(-5+5*i) for i in range(0, 9)])
     # plt.yticks(["%d%(-5+5*i) for i in range(0, 7)])
@@ -202,7 +203,7 @@ if __name__ == "__main__":
         
         plt.ylabel('Improvement over \nCUDA Stream Sync')
         ax2.get_yaxis().set_label_coords(-0.17,0.4)
-        plt.xlabel("B$\\times$S")
+        plt.xlabel("Number of Tokens in %s MLP on A100"%(model.upper()))
         ax2.get_xaxis().set_label_coords(0.45,-0.4)
         plt.legend((p1[0], p2[0], p4[0]), 
                    ('RowSync', 'TileSync', 'StreamK'),
