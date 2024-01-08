@@ -3,6 +3,7 @@ import re
 import sys
 import os
 import tile_sizes_db
+import time
 
 attention_or_mlp = sys.argv[1].lower()
 model = sys.argv[2].lower()
@@ -225,7 +226,7 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
 if attention_or_mlp == "mlp":
-  cases = [1,2,4,8,16,32,64,128,256,512,768,1024,1280,1536,1792,2048]
+  cases = [512,768,1024,1280,1536,1792,2048] + [2048+256*i for i in range(1, 5)] ##1,2,4,8,16,32,64,128,256, # 
 else:
   #cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
   cases = [(512,1),(512,2), (512,4), (1024,1), (1024,2), (1024,4), (2048,1), (2048,2), (2048,4)]
@@ -244,9 +245,12 @@ for case in cases:
   if attention_or_mlp == "attention":
     caseTiles = tiles[seq][m]
   else:
-    caseTiles = tiles[m]
+    if m > 2048:
+      caseTiles = tiles[4096]
+    else:
+      caseTiles = tiles[m]
 
-  if False:
+  if True:
     if attention_or_mlp == "attention":
       (s, o) = subprocess.getstatusoutput(f"python3 torch-baselines/torchAttention.py {m} {int(H/8)} {H} {H}")
     else:
@@ -258,19 +262,21 @@ for case in cases:
       ctime = o
       cublasTimes[m] = ctime
 
-    print(f'{m} & {seq} & {H} & {"torch"} & {"%.2f"%float(ctime)}')
-    continue
+    result_row = f'{m} & {seq} & {H} & {"torch"} & {"%.2f"%float(ctime)}'
+    print(result_row)
+    results_csv += result_row + "\n"
+
   if True:
-    genAndMakeStreamK(tiles[m], 0)
+    genAndMakeStreamK(caseTiles, 0)
     streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
-    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(2*FFN if model=='llama' else FFN)} --k={H} " + f"--split={tiles[m]['baseline']['split_ks'][0]}")
+    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(2*FFN if model=='llama' else FFN)} --k={H} " + f"--split={caseTiles['baseline']['split_ks'][0]}")
     if s != 0:
       print("StreamK Error")
       print(o)
 
     firstGeMMStreamK = getStreamKTimes(o)
-    genAndMakeStreamK(tiles[m], 1)
-    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={H} --k={int(FFN)} " + f"--split={tiles[m]['baseline']['split_ks'][1]}")
+    genAndMakeStreamK(caseTiles, 1)
+    (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={H} --k={int(FFN)} " + f"--split={caseTiles['baseline']['split_ks'][1]}")
     if s != 0:
       print("StreamK Error")
       print(o)
@@ -335,6 +341,7 @@ for case in cases:
     result_row = f'{m} & {seq} & {H} & {syncPolicy} & {"%.2f"%avg(bTimeTotal)} & {"%.2f"%stdev(bTimeTotal)} & {"%.2f"%avg(bTimeMatmul1)} & {"%.2f"%avg(bTimeMatmul2)} & {"%.2f"%avg(otime)} & {"%.2f"%stdev(otime)} & {"%.2f"%(100 - avg(otime)/avg(bTimeTotal)*100)}'
     results_csv += result_row + "\n"
     print(result_row)
+  time.sleep(5)
 
 with open(os.path.join(resultsDir(""), f"{attention_or_mlp}-{model}-{arch}.csv"), "w") as f:
   f.write(results_csv)

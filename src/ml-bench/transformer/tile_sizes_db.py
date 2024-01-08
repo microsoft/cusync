@@ -844,16 +844,16 @@ llama_attention_v100 = {
   }
 
 gpt3_mlp_a100 = {
-  2048: {"TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
+  4096: {"TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
     "NumStages" : 3,
     "baseline": {"split_ks": [1,1]},
     "rowsync": {
-      "TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
+      "TileSizes" : [[256, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
       "split_ks": [1,1],
       "NumStages" : 3,
     },
     "tilesync": {"split_ks": [1,1],
-                "TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
+                "TileSizes" : [[256, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
                   "split_ks": [1,1],
                   "NumStages" : 3,
                 "AvoidCustomOrder": False,
@@ -861,11 +861,33 @@ gpt3_mlp_a100 = {
                 "ReorderTileLoads": True,
                 "NoAtomicAdd": True}
   },
-  1792: {"TileSizes" : [[256, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
+  2048: {"TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
+    "NumStages" : 3,
+    "baseline": {"split_ks": [1,1]},
+    "rowsync": {
+      "TileSizes" : [[128, 256, 64, 64, 64, 64], [128, 256, 64, 64, 64, 64]],
+      "split_ks": [1,1],
+      "NumStages" : 3,
+    },
+    "tilesync": {"split_ks": [1,1],
+                "TileSizes" : [[128, 256, 64, 64, 64, 64], [128, 256, 64, 64, 64, 64]],
+                  "split_ks": [1,1],
+                  "NumStages" : 3,
+                "AvoidCustomOrder": False,
+                "AvoidWaitKernel": False,
+                "ReorderTileLoads": True,
+                "NoAtomicAdd": True}
+  },
+  1792: {"TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
     "NumStages" : 5,
     "baseline": {"split_ks": [2,1]},
-    "rowsync": {"split_ks": [2,1]},
-    "tilesync": {"split_ks": [2,1],
+    "rowsync": {"split_ks": [1,1],
+                "TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
+                "NumStages" : 5
+                },
+    "tilesync": {"split_ks": [1,1],
+                "TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
+                "NumStages" : 5,
                 "AvoidCustomOrder": False,
                 "AvoidWaitKernel": False,
                 "ReorderTileLoads": True,
@@ -1064,6 +1086,20 @@ gpt3_mlp_a100 = {
 }
 
 llama_mlp_a100 = {
+    4096: {
+      "TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
+      "NumStages": [3, 3],
+      "baseline": {"split_ks": [1,1]},
+      "rowsync": {"split_ks": [1,1],
+                  "TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
+                  "NumStages": [3, 3]},
+      "tilesync": {"split_ks": [1,1],
+                  "TileSizes" : [[256, 128, 64, 64, 64, 64], [256, 128, 64, 64, 64, 64]],
+                  "NumStages": [3, 3],
+                  "AvoidCustomOrder": False,
+                  "AvoidWaitKernel": False,
+                  "ReorderTileLoads": True,}
+    },
     2048: {
       "TileSizes" : [[128, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
       "NumStages": [3, 3],
@@ -1079,14 +1115,14 @@ llama_mlp_a100 = {
                   "ReorderTileLoads": True,}
     },
     1792: {
-      "TileSizes" : [[128, 128, 32, 64, 64, 32], [256, 128, 32, 64, 64, 32]],
-      "NumStages": [3, 3],
+      "TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
+      "NumStages": [4, 4],
       "baseline": {"split_ks": [1,1]},
       "rowsync": {"split_ks": [1,1],
-                  "TileSizes" : [[128, 128, 32, 64, 64, 32], [128, 128, 32, 64, 64, 32]],
+                  "TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
                   "NumStages": [4, 4]},
       "tilesync": {"split_ks": [1,1],
-                  "TileSizes" : [[128, 128, 32, 64, 64, 32], [128, 128, 32, 64, 64, 32]],
+                  "TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
                   "NumStages": [4, 4],
                   "AvoidCustomOrder": False,
                   "AvoidWaitKernel": False,
@@ -1098,6 +1134,8 @@ llama_mlp_a100 = {
       "baseline": {"split_ks": [2,1]},
       "rowsync": {"split_ks": [1,1]},
       "tilesync": {"split_ks": [1,1],
+                  "TileSizes" : [[128, 256, 32, 64, 64, 32], [128, 256, 32, 64, 64, 32]],
+                  "NumStages": [5, 5],
                   "AvoidCustomOrder": False,
                   "AvoidWaitKernel": False,
                   "ReorderTileLoads": True,}
@@ -1120,7 +1158,7 @@ llama_mlp_a100 = {
     },
     1024: {"TileSizes" : [[128, 128, 32, 64, 64, 32], [128, 128, 32, 64, 64, 32]],
       "NumStages": [3, 3],
-      "baseline": {"split_ks": [2,1]},
+      "baseline": {"split_ks": [3,1]},
       "rowsync": {"split_ks": [1,1]},
       "tilesync": {"split_ks": [1,1],
                   "AvoidCustomOrder": False,
