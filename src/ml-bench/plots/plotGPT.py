@@ -129,7 +129,7 @@ if __name__ == "__main__":
     # secFactor = 1e3 if (secs == "ms") else 1e6
     torchT = np.array(torchT)
     baseline = np.array(baseline)
-    ind = np.arange(len(baseline)) * 3
+    ind = np.arange(len(baseline))
     matmul1 = np.array(matmul1)
     matmul2 = np.array(matmul2)
     softmax = np.array(softmax)
@@ -142,11 +142,11 @@ if __name__ == "__main__":
     analyticalOverlapTimes = np.array(analyticalOverlapTimes)
 
     cutlassSpeedup = (torchT - baseline)/torchT*100
-    rowSpeedup = (torchT - rowOverlap)/torchT*100
-    tileSpeedup = (torchT - tileOverlap)/torchT*100
+    cusync = np.minimum(rowOverlap, tileOverlap)
+    cusyncSpeedup = (torchT - cusync)/torchT*100
+    cusyncOverCUTLASS = (baseline - cusync)/baseline*100 
     streamKSpeedup = (torchT - streamK)/torchT*100
     
-    print(streamKSpeedup)
     # for i in range(len(rowSpeedup)):
     #     if rowSpeedup[i] < -2:
     #         rowSpeedup[i]= -2
@@ -155,17 +155,17 @@ if __name__ == "__main__":
     #     if tileSpeedup[i] < 0:
     #         tileSpeedup[i] = 2
     
-    cusyncSpeedup = np.maximum(rowSpeedup, tileSpeedup)
-
+    
     # print(rowSpeedup)
     # print(tileSpeedup)
     # print(streamKSpeedup)
 
     # analyticalSpeedup = baseline/analyticalOverlapTimes
     fig, ax2 = plt.subplots(1,1,sharex=True)
-    p0 = ax2.bar(ind, cutlassSpeedup, color=colors[0])
-    p1 = ax2.bar(ind+1, cusyncSpeedup,color=colors[1])
-    p2 = ax2.bar(ind+2, streamKSpeedup,color=colors[2])
+    p0 = ax2.plot(ind, cutlassSpeedup, 'o', color=colors[0])
+    p1 = ax2.plot(ind, cusyncOverCUTLASS, '+', color=colors[1])
+    p2 = ax2.plot(ind, cusyncSpeedup, 'x', color=colors[2])
+    p3 = ax2.plot(ind, streamKSpeedup, 's',color=colors[3])
 
     # if attention_or_mlp == "attention":
     #     stridedTileSpeedup = (baseline - stridedTileOverlap)/baseline * 100
@@ -181,9 +181,9 @@ if __name__ == "__main__":
  
     # p3 = ax2.plot(list(range(0, len(data)//2)), analyticalSpeedup)
     
-    for bar1, d in zip(p1, cusyncSpeedup):
-        ax2.text(bar1.get_x()+bar1.get_width()/2-0.05, bar1.get_height()+0.5, "%.0f"%(round(d,0)), 
-        color = 'black', ha = 'center', va = 'center', rotation=0)
+    # for bar1, d in zip(p1, cusyncSpeedup):
+    #     ax2.text(bar1.get_x()+bar1.get_width()/2-0.05, bar1.get_height()+0.5, "%.0f"%(round(d,0)), 
+    #     color = 'black', ha = 'center', va = 'center', rotation=0)
 
     # for bar1, speedup in zip(p3, fastkronspeedup):
     #     ax2.text(bar1.get_x()+bar1.get_width()/2+0.04, bar1.get_height()+0.05, r"%.2f$\times$"%(1/speedup), color = 'black', ha = 'center', va = 'center', rotation=0, fontsize='large')
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     #     plt.yticks([0.6+0.1*i for i in range(0, 7)])
     # else:
     # ax2.margins(0.02)
-    max_speedup = max([np.amax(cusyncSpeedup), np.amax(streamKSpeedup)])
+    max_speedup = max([np.amax(cusyncSpeedup), np.amax(streamKSpeedup), np.amax(cusyncOverCUTLASS)])
     max_speedup = int(((max_speedup+10-1)//10)*10)
     plt.ylim(-5, max_speedup)
     plt.yticks(ticks=[-5+5*i for i in range(0, max_speedup//5+1)],
@@ -206,16 +206,16 @@ if __name__ == "__main__":
     # plt.yticks(np.arange(0, 1.25, 0.25))
     if attention_or_mlp == "mlp":
         xt = list(m)
-        plt.xticks(ind+1, xt, rotation=90)
+        plt.xticks(ind, xt, rotation=90)
         
-        plt.ylabel('Improvement over PyTorch (cuBLAS)')
+        plt.ylabel('Percentage Improvement of X/Y')
         # ax2.get_yaxis().set_label_coords(-0.17,0.4)
         plt.xlabel("Number of Tokens in %s MLP on A100"%(model.upper()))
         # ax2.get_xaxis().set_label_coords(0.45,-0.4)
-        plt.legend((p0[0], p2[0], p1[0]),
-                   ('CUTLASS', 'StreamK', 'CuSync'),
-                   loc='upper left', bbox_to_anchor=(0.0, 1.20),
-                   ncol=4,columnspacing=1,handlelength=1.7)
+        plt.legend((p0[0], p3[0], p2[0], p1[0]),
+                   ('CUTLASS/PyTorch', 'StreamK/PyTorch', 'CuSync/PyTorch', 'CuSync/CUTLASS'),
+                   loc='upper left', bbox_to_anchor=(-0.1, 1.20),
+                   ncol=2,columnspacing=1,handlelength=1.7)
     else:
         ax2.get_yaxis().set_visible(False)
         ax2.get_xaxis().set_label_coords(0.45,-0.4)
