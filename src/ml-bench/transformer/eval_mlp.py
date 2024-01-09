@@ -226,7 +226,8 @@ if 'stridedsync' in policies and attention_or_mlp == 'mlp':
 deleteFiles(policies+['baseline'], attention_or_mlp)
 
 if attention_or_mlp == "mlp":
-  cases = [512,768,1024,1280,1536,1792,2048] + [2048+256*i for i in range(1, 5)] ##1,2,4,8,16,32,64,128,256, # 
+  cases = (([1,2,4,8,16,32,64,128,256]) if arch=='v100' else []) +\
+          [512+256*i for i in range(0, 11)] 
 else:
   #cases = [(0,256), (0,512), (0, 1024), (0, 2048), (1024,1), (1024,4), (2048,1), (2048,4)]
   cases = [(512,1),(512,2), (512,4), (1024,1), (1024,2), (1024,4), (2048,1), (2048,2), (2048,4)]
@@ -266,7 +267,7 @@ for case in cases:
     print(result_row)
     results_csv += result_row + "\n"
 
-  if True:
+  if arch == "a100":
     genAndMakeStreamK(caseTiles, 0)
     streamk_command = buildDir("streamk-eval") + f" --m={m} --alpha=1 --beta=0 --iterations=20 "
     (s, o) = subprocess.getstatusoutput(streamk_command + f"--n={int(2*FFN if model=='llama' else FFN)} --k={H} " + f"--split={caseTiles['baseline']['split_ks'][0]}")
