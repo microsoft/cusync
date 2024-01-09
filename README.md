@@ -8,7 +8,7 @@ More details are available at https://arxiv.org/abs/2305.13450.
 
 ## Performance
 
-The graphs below shows percentage improvement over GPT3 and LLAMA MLPs using optimized NVIDIA CUTLASS GeMMs on NVIDIA Tesla A100 and NVIDIA Tesla V100 GPUs for GPT3 and LLAMA.
+The graphs below shows percentage improvement over GPT3 and LLAMA MLPs using optimized NVIDIA CUTLASS GeMMs on NVIDIA Tesla A100 and NVIDIA Tesla V100 GPUs for GPT3 and LLAMA (8 way model parallelism).
 NVIDIA CUTLASS StreamK is another method to optimize the utilization during the last thread block wave.
 PyTorch in the below experiments only performs GeMM and not the pointwise computations like GeLU, while CUTLASS implementations fuse these computations with the first GeMM. 
 
