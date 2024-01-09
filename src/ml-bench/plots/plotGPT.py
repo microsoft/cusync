@@ -163,7 +163,7 @@ if __name__ == "__main__":
     # analyticalSpeedup = baseline/analyticalOverlapTimes
     fig, ax2 = plt.subplots(1,1,sharex=True)
     p0 = ax2.plot(ind, cutlassSpeedup, 'o', color=colors[0])
-    p1 = ax2.plot(ind, cusyncOverCUTLASS, '+', color=colors[1])
+    p1 = ax2.plot(ind, cusyncOverCUTLASS, marker='+', color=colors[1])
     p2 = ax2.plot(ind, cusyncSpeedup, 'x', color=colors[2])
     p3 = ax2.plot(ind, streamKSpeedup, 's',color=colors[3])
 
