@@ -43,4 +43,7 @@ The MLP code in `src/ml-bench/transformer` provides a good way to use CUTLASS cu
 
 Run tests using `make tests`
 
+## Evaluation
+
+Instructions are in `src/ml-bench/README.md`.
 
