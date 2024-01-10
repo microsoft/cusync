@@ -17,11 +17,8 @@ PyTorch in the below experiments only performs GeMM and not the pointwise comput
 ![](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-llama-a100.png?raw=true)
 
 #### NVIDIA Tesla V100 SXM2 32GB with CUDA 12.2
-
-Coming Soon
-
-![a](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-v100.png?raw=true)
-![a](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-llama-v100.png?raw=true)
+![](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-gpt3-v100.png?raw=true)
+![](https://github.com/parasailteam/cusync/blob/main/src/ml-bench/plots/mlp-llama-v100.png?raw=true)
 
 ## Usage
 
