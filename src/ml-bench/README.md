@@ -3,7 +3,17 @@ Evaluation
 
 This directory contains instructions to run evaluation for results.
 
-## Pre-requisites
+## Docker Image
+
+The docker file with pre-requisites is in the main directory. Create the docker container using 
+
+```
+docker build -t cusync-cgo-24 .
+docker run -it --gpus all cusync-cgo-24
+cd /cusync
+```
+
+## Pre-requisites (Native Execution)
 
 ### Linux Installation
 We recommend using Ubuntu 22.04 as the Linux OS. We have not tested our artifact with
