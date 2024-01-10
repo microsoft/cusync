@@ -145,27 +145,23 @@ if __name__ == "__main__":
     cusync = np.minimum(rowOverlap, tileOverlap)
     cusyncSpeedup = (torchT - cusync)/torchT*100
     cusyncOverCUTLASS = (baseline - cusync)/baseline*100 
-    streamKSpeedup = (torchT - streamK)/torchT*100
+    if gpu == "a100":
+        streamKSpeedup = (torchT - streamK)/torchT*100
+    else:
+        streamKSpeedup = np.array([0])
     
-    # for i in range(len(rowSpeedup)):
-    #     if rowSpeedup[i] < -2:
-    #         rowSpeedup[i]= -2
-    #     if streamKSpeedup[i] < -5:
-    #         streamKSpeedup[i] = (0.1 * i)
-    #     if tileSpeedup[i] < 0:
-    #         tileSpeedup[i] = 2
-    
-    
-    # print(rowSpeedup)
-    # print(tileSpeedup)
-    # print(streamKSpeedup)
+    cusyncSpeedup = np.clip(cusyncSpeedup, -5, 45)
+    cutlassSpeedup = np.clip(cutlassSpeedup, -5, 45)
+    streamKSpeedup = np.clip(streamKSpeedup, -5, 45)
+    cusyncOverCUTLASS = np.clip(cusyncOverCUTLASS, -5, 45)
 
     # analyticalSpeedup = baseline/analyticalOverlapTimes
     fig, ax2 = plt.subplots(1,1,sharex=True)
     p0 = ax2.plot(ind, cutlassSpeedup, 'o', color=colors[0])
     p1 = ax2.plot(ind, cusyncOverCUTLASS, marker='+', color=colors[1])
     p2 = ax2.plot(ind, cusyncSpeedup, 'x', color=colors[2])
-    p3 = ax2.plot(ind, streamKSpeedup, 's',color=colors[3])
+    if gpu == "a100":
+        p3 = ax2.plot(ind, streamKSpeedup, 's',color=colors[3])
 
     # if attention_or_mlp == "attention":
     #     stridedTileSpeedup = (baseline - stridedTileOverlap)/baseline * 100
@@ -193,7 +189,9 @@ if __name__ == "__main__":
     # else:
     # ax2.margins(0.02)
     max_speedup = max([np.amax(cusyncSpeedup), np.amax(streamKSpeedup), np.amax(cusyncOverCUTLASS)])
+    print(max_speedup)
     max_speedup = int(((max_speedup+10-1)//10)*10)
+    print(max_speedup)
     plt.ylim(-5, max_speedup)
     plt.yticks(ticks=[-5+5*i for i in range(0, max_speedup//5+1)],
                labels=["%d%%"%(-5+5*i) for i in range(0, max_speedup//5 + 1)])
@@ -212,8 +210,14 @@ if __name__ == "__main__":
         # ax2.get_yaxis().set_label_coords(-0.17,0.4)
         plt.xlabel("Number of Tokens in %s MLP on A100"%(model.upper()))
         # ax2.get_xaxis().set_label_coords(0.45,-0.4)
-        plt.legend((p0[0], p3[0], p2[0], p1[0]),
-                   ('CUTLASS/PyTorch', 'StreamK/PyTorch', 'CuSync/PyTorch', 'CuSync/CUTLASS'),
+        if gpu == "a100":
+            labels = (p0[0], p3[0], p2[0], p1[0])
+            legends = ('CUTLASS/PyTorch', 'StreamK/PyTorch', 'CuSync/PyTorch', 'CuSync/CUTLASS')
+        else:
+            labels = (p0[0], p2[0], p1[0])
+            legends = ('CUTLASS/PyTorch', 'CuSync/PyTorch', 'CuSync/CUTLASS')
+
+        plt.legend(labels, legends,
                    loc='upper left', bbox_to_anchor=(-0.1, 1.20),
                    ncol=2,columnspacing=1,handlelength=1.7)
     else:
