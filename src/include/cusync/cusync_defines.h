@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+//
 #if (defined(__CUDACC__) || defined(__NVCC__))
   #define CUSYNC_DEVICE __device__ __forceinline__
 #else

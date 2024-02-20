@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
 #include "tile-orders.h"
 #include "policies.h"
 #include "device-functions.h"

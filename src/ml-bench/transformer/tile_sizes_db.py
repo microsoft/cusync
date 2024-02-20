@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
 # Dictionary of tile sizes for each M
 gpt3_mlp_v100 = {
   4096: {"TileSizes" : [[256, 256, 32, 128, 128, 32], [256, 256, 32, 128, 128, 32]],
