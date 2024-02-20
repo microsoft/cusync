@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+//
 #include <assert.h>
 #include <stdio.h>
 #include <type_traits>
